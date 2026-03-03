@@ -1,0 +1,365 @@
+/**
+ * Award-Site-Clean Layout System
+/**
+ * Modern app shell for SKÖLL-TRACK
+ */
+
+/* ===== APP SHELL ===== */
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(180deg, #000000 0%, #0a0a0a 100%);
+  overflow: hidden;
+}
+
+/* ===== HEADER ===== */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #06D6A0;
+  box-shadow: 0 0 12px rgba(6, 214, 160, 0.6);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.app-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.header-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-bottom: 2px solid transparent;
+  pointer-events: auto;
+}
+
+.nav-link:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.nav-link.is-active {
+  color: #06D6A0;
+  border-bottom-color: #06D6A0;
+}
+
+.header-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.icon-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.125rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* ===== MAIN LAYOUT ===== */
+.app-main {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 1.2fr);
+  gap: 1rem;
+  padding: 1rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ===== SCENE PANEL ===== */
+.scene-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.scene-container {
+  position: relative;
+  flex: 1;
+  border-radius: 0.125rem;
+  overflow: hidden;
+  background: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+#main-scene,
+.scene-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* ===== HUD OVERLAY ===== */
+.hud-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.hud-metrics {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.125rem;
+  pointer-events: auto;
+  align-self: start;
+}
+
+.hud-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.hud-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  align-self: end;
+}
+
+.hud-timeline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.125rem;
+  pointer-events: auto;
+}
+
+.timeline-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hud-controls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.125rem;
+  pointer-events: auto;
+}
+
+.chip {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.125rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.chip.is-active {
+  background: #06D6A0;
+  border-color: #06D6A0;
+  color: #000000;
+}
+
+/* ===== INFO PANEL ===== */
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.125rem;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.info-header h1 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.info-header p {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+.info-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  flex: 1;
+}
+
+.info-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1024px) {
+  .app-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(400px, 1fr) auto;
+  }
+  
+  .info-panel {
+    max-height: 400px;
+  }
+  
+  .header-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.5rem 1rem;
+  }
+  
+  .app-main {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+  
+  .scene-container {
+    height: min(60vh, 480px);
+  }
+  
+  .hud-overlay {
+    padding: 1rem;
+  }
+  
+  .hud-metrics {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .hud-controls {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .chip {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .info-panel {
+    padding: 1rem;
+    max-height: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 0.75rem;
+  }
+  
+  .header-right {
+    gap: 0.25rem;
+  }
+  
+  .icon-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.875rem;
+  }
+}

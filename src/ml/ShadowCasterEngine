@@ -1,0 +1,24 @@
+/**
+ * SKÖLL-TRACK SHADOW CASTER ENGINE v1.0
+ * Implements Ray-Traced Shadow Mapping for Planetary Eclipses [cite: 2025-12-11]
+ */
+
+import * as THREE from 'three';
+
+export function configureShadowHierarchy(renderer: THREE.WebGLRenderer) {
+  // 1. Enable high-fidelity Shadow Maps [cite: 2025-12-11]
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap; // Standard PCF shadows (PCFSoftShadowMap is deprecated)
+}
+
+export function updateShadowSource(light: THREE.PointLight) {
+  // 2. Configure the Sun as the Shadow Master [cite: 2025-12-11]
+  light.castShadow = true;
+  
+  // High resolution is required for distant moon shadows [cite: 2025-12-11]
+  light.shadow.mapSize.width = 4096;
+  light.shadow.mapSize.height = 4096;
+  
+  // Set the bias to prevent "Shadow Acne" on planet surfaces [cite: 2025-11-03]
+  light.shadow.bias = -0.0001;
+}

@@ -1,0 +1,86 @@
+{
+  "_metadata": {
+    "description": "Physics constants for the 8 planets and Earth's Moon",
+    "citations": ["2025-12-11", "2025-08-12"],
+    "fields": {
+      "rotationSpeed": "Equatorial rotation speed in km/h",
+      "gravity":       "Surface gravitational acceleration in m/s²",
+      "averageTemp":   "Mean surface (or cloud-top) temperature in °C",
+      "auroraColors":  "Dominant visible aurora hues based on atmospheric composition"
+    }
+  },
+  "planets": [
+    {
+      "name": "Mercury",
+      "rotationSpeed": 10.83,
+      "gravity": 3.7,
+      "averageTemp": 167,
+      "auroraColors": ["faint white", "blue"],
+      "auroraNote": "Weak magnetosphere drives localized polar X-ray/UV aurora; blue tinge in upper exosphere"
+    },
+    {
+      "name": "Venus",
+      "rotationSpeed": 6.52,
+      "gravity": 8.87,
+      "averageTemp": 464,
+      "auroraColors": ["faint green"],
+      "auroraNote": "Oxygen-driven 557.7 nm green emission detected by Venus Express in upper atmosphere"
+    },
+    {
+      "name": "Earth",
+      "rotationSpeed": 1674.4,
+      "gravity": 9.81,
+      "averageTemp": 15,
+      "auroraColors": ["green", "purple", "red"],
+      "auroraNote": "Oxygen (557.7 nm green / 630 nm red) and nitrogen (purple/blue) dominate visible aurora"
+    },
+    {
+      "name": "Moon",
+      "rotationSpeed": 16.65,
+      "gravity": 1.62,
+      "averageTemp": -23,
+      "auroraColors": [],
+      "auroraNote": "No global magnetic field and negligible atmosphere; no sustained aurora observed"
+    },
+    {
+      "name": "Mars",
+      "rotationSpeed": 866.5,
+      "gravity": 3.72,
+      "averageTemp": -60,
+      "auroraColors": ["faint blue"],
+      "auroraNote": "CO₂/N₂ thin atmosphere produces UV aurora; crustal magnetic patches cause faint visible blue glow"
+    },
+    {
+      "name": "Jupiter",
+      "rotationSpeed": 45300,
+      "gravity": 24.79,
+      "averageTemp": -110,
+      "auroraColors": ["intense pink", "violet"],
+      "auroraNote": "H₃⁺ ions in hydrogen/helium atmosphere generate brilliant pink/violet aurora; Io plasma torus amplifies intensity"
+    },
+    {
+      "name": "Saturn",
+      "rotationSpeed": 35500,
+      "gravity": 10.44,
+      "averageTemp": -140,
+      "auroraColors": ["blue", "violet"],
+      "auroraNote": "Hydrogen atmosphere produces UV/blue aurora; ring plasma adds violet tones around polar ovals"
+    },
+    {
+      "name": "Uranus",
+      "rotationSpeed": 9315,
+      "gravity": 8.69,
+      "averageTemp": -195,
+      "auroraColors": ["blue"],
+      "auroraNote": "Hydrogen-dominated atmosphere with tilted magnetic axis produces diffuse blue auroral patches"
+    },
+    {
+      "name": "Neptune",
+      "rotationSpeed": 9600,
+      "gravity": 11.15,
+      "averageTemp": -200,
+      "auroraColors": ["blue", "violet"],
+      "auroraNote": "H₂/He atmosphere with irregular magnetic field generates blue-violet aurora across broad latitude bands"
+    }
+  ]
+}

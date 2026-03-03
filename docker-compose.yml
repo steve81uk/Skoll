@@ -1,0 +1,58 @@
+services:
+
+  # ── Frontend (Nginx serving Vite dist) ──────────────────────────────────────
+  skoll-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    image: skoll-frontend:latest
+    container_name: skoll-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      skoll-ml:
+        condition: service_healthy
+    networks:
+      - skoll-net
+    labels:
+      com.skoll.service: "frontend"
+
+  # ── ML / WebSocket server ────────────────────────────────────────────────────
+  skoll-ml:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ml-server
+    image: skoll-ml:latest
+    container_name: skoll-ml
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      FETCH_INTERVAL_MS: 60000
+      LOG_LEVEL: info
+    volumes:
+      # Persist logs outside container
+      - ./logs:/app/logs
+    networks:
+      - skoll-net
+    labels:
+      com.skoll.service: "ml-server"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  skoll-net:
+    driver: bridge
+
+volumes:
+  # Named volume for ML model cache if needed in future
+  skoll-models:

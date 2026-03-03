@@ -1,0 +1,124 @@
+{
+  "events": [
+    {
+      "id": "carrington-1859",
+      "name": "Carrington Event",
+      "category": "Geomagnetic Storm",
+      "severity": "X45+",
+      "impactDate": "1859-09-02T00:00:00Z",
+      "observationStart": "1859-08-28T00:00:00Z",
+      "description": "The most intense geomagnetic storm in recorded history. Auroras visible near equator. Telegraph systems worldwide failed.",
+      "kpIndex": 9,
+      "solarWindSpeed": 2500,
+      "notes": "White-light flare observed by Richard Carrington on Sept 1, CME arrived ~17 hours later"
+    },
+    {
+      "id": "halloween-2003",
+      "name": "Halloween Storms",
+      "category": "Solar Storm Series",
+      "severity": "X28+",
+      "impactDate": "2003-10-29T00:00:00Z",
+      "observationStart": "2003-10-26T00:00:00Z",
+      "description": "Series of massive solar flares including the 3rd largest on record. Damaged satellites, disrupted power grids.",
+      "kpIndex": 9,
+      "solarWindSpeed": 2000,
+      "notes": "Multiple X-class flares from AR 486, including X17 and X10+ events"
+    },
+    {
+      "id": "quebec-1989",
+      "name": "Quebec Blackout",
+      "category": "Geomagnetic Storm",
+      "severity": "X15",
+      "impactDate": "1989-03-13T00:00:00Z",
+      "observationStart": "1989-03-10T00:00:00Z",
+      "description": "6 million people lost power in Quebec for 9 hours. Aurora seen as far south as Texas.",
+      "kpIndex": 9,
+      "solarWindSpeed": 1800,
+      "notes": "CME from AR 5395, collapsed Hydro-Quebec power grid in 90 seconds"
+    },
+    {
+      "id": "bastille-2000",
+      "name": "Bastille Day Event",
+      "category": "Solar Flare",
+      "severity": "X5.7",
+      "impactDate": "2000-07-15T00:00:00Z",
+      "observationStart": "2000-07-14T00:00:00Z",
+      "description": "Major solar eruption coinciding with French national holiday. Proton storm disrupted satellites.",
+      "kpIndex": 9,
+      "solarWindSpeed": 1600,
+      "notes": "Full-halo CME, produced spectacular auroras globally"
+    },
+    {
+      "id": "miyake-774",
+      "name": "Miyake Event 774 CE",
+      "category": "Cosmic Ray Event",
+      "severity": "Unknown",
+      "impactDate": "0774-01-01T00:00:00Z",
+      "observationStart": "0773-10-01T00:00:00Z",
+      "description": "Massive cosmic ray spike detected in tree rings. Likely 10x stronger than Carrington. Origin unknown.",
+      "kpIndex": 9,
+      "solarWindSpeed": 3000,
+      "notes": "Carbon-14 spike suggests superflare or nearby gamma-ray burst"
+    },
+    {
+      "id": "may-1921",
+      "name": "New York Railroad Storm",
+      "category": "Geomagnetic Storm",
+      "severity": "X15+",
+      "impactDate": "1921-05-15T00:00:00Z",
+      "observationStart": "1921-05-13T00:00:00Z",
+      "description": "Major geomagnetic storm disrupted telegraph and railroad signals. Aurora visible in tropics.",
+      "kpIndex": 9,
+      "solarWindSpeed": 2200,
+      "notes": "Brewster NY railroad station caught fire from induced currents"
+    },
+    {
+      "id": "valentines-2011",
+      "name": "Valentine's Day Storm",
+      "category": "Solar Storm",
+      "severity": "X2.2",
+      "impactDate": "2011-02-15T00:00:00Z",
+      "observationStart": "2011-02-14T00:00:00Z",
+      "description": "First major flare of Solar Cycle 24. Disrupted radio communications in China.",
+      "kpIndex": 7,
+      "solarWindSpeed": 1400,
+      "notes": "AR 1158 produced multiple M-class and X-class flares"
+    },
+    {
+      "id": "apollo-16",
+      "name": "Apollo 16 Near-Miss",
+      "category": "Solar Particle Event",
+      "severity": "X5",
+      "impactDate": "1972-08-04T00:00:00Z",
+      "observationStart": "1972-08-02T00:00:00Z",
+      "description": "Massive solar storm occurred between Apollo 16 and 17 missions. Would have been lethal to astronauts.",
+      "kpIndex": 8,
+      "solarWindSpeed": 2850,
+      "notes": "Fastest CME on record at the time, 2850 km/s"
+    },
+    {
+      "id": "july-2012",
+      "name": "July 2012 Near-Miss",
+      "category": "Extreme CME",
+      "severity": "X12+",
+      "impactDate": "2012-07-23T00:00:00Z",
+      "observationStart": "2012-07-21T00:00:00Z",
+      "description": "Carrington-class CME missed Earth by 9 days. Would have caused $2 trillion in damage.",
+      "kpIndex": 9,
+      "solarWindSpeed": 3000,
+      "notes": "Fastest CME since 1859, tracked by STEREO spacecraft"
+    },
+    {
+      "id": "starlink-2022",
+      "name": "Starlink Loss Event",
+      "category": "Geomagnetic Storm",
+      "severity": "G1-G2",
+      "impactDate": "2022-02-04T00:00:00Z",
+      "observationStart": "2022-02-03T00:00:00Z",
+      "description": "40 Starlink satellites destroyed by atmospheric expansion from minor geomagnetic storm.",
+      "kpIndex": 5,
+      "solarWindSpeed": 600,
+      "notes": "Demonstrated vulnerability of LEO megaconstellations"
+    }
+  ]
+}

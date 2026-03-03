@@ -1,0 +1,177 @@
+/**
+ * Global Typography Enforcement
+ * Inter for body, Rajdhani for headers, 0.8rem base
+ */
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');
+
+/* Root typography settings */
+:root {
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-size-base: 0.8rem;
+  --font-size-xs: 0.65rem;
+  --font-size-sm: 0.75rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+}
+
+/* Global body typography */
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headers use Rajdhani */
+h1, h2, h3, h4, h5, h6,
+.heading,
+.title,
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+h1 { font-size: var(--font-size-2xl); }
+h2 { font-size: var(--font-size-xl); }
+h3 { font-size: var(--font-size-lg); }
+h4, h5, h6 { font-size: var(--font-size-md); }
+
+/* HUD and monospace elements */
+.font-mono,
+[class*="font-mono"] {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: var(--font-size-xs);
+}
+
+/* Data displays */
+.text-xs { font-size: var(--font-size-xs) !important; }
+.text-sm { font-size: var(--font-size-sm) !important; }
+.text-base { font-size: var(--font-size-base) !important; }
+.text-md { font-size: var(--font-size-md) !important; }
+.text-lg { font-size: var(--font-size-lg) !important; }
+.text-xl { font-size: var(--font-size-xl) !important; }
+.text-2xl { font-size: var(--font-size-2xl) !important; }
+
+/* Secondary data visibility */
+.secondary-data {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.secondary-data:hover,
+*:hover > .secondary-data,
+*:focus-within > .secondary-data {
+  opacity: 1;
+}
+
+/* Metric panels */
+.metric-panel {
+  font-size: var(--font-size-sm);
+}
+
+.metric-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--font-size-xl);
+}
+
+.metric-label {
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+/* Button typography */
+button {
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* Input typography */
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+}
+
+/* Code blocks */
+code,
+pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--font-size-xs);
+}
+
+/* Tooltips */
+[role="tooltip"],
+.tooltip {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-body);
+}
+
+/* Navigation */
+nav,
+.nav-item {
+  font-family: var(--font-display);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* Wolf-specific styles */
+.wolf-brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.wolf-metric {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  line-height: 1.2;
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  :root {
+    --font-size-base: 0.75rem;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --font-size-base: 0.875rem;
+  }
+}
+
+/* Performance optimization */
+* {
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure consistent line heights */
+p, li, td, th {
+  line-height: 1.6;
+}
+
+/* Status indicators */
+.status-active,
+.status-warning,
+.status-critical {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
