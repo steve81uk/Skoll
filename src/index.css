@@ -45,8 +45,8 @@
 html, body, #root {
   margin: 0;
   padding: 0;
-  inline-size: 100%;
-  block-size: 100%;
+  width: 100%;
+  height: 100%;
   overflow-x: hidden; /* Allow vertical scroll, block horizontal */
   overflow-y: auto;
   background: #000;
@@ -58,8 +58,8 @@ html, body, #root {
 
 canvas {
   outline: none;
-  inline-size: 100% !important;
-  block-size: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
   display: block !important;
 }
 
@@ -97,10 +97,10 @@ canvas {
 
 .scanline-overlay {
   position: fixed;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 100%;
-  block-size: 100vh;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
   background: linear-gradient(
     transparent 50%,
     rgba(0, 255, 255, 0.02) 51%
@@ -113,10 +113,10 @@ canvas {
 
 .scanline-sweep {
   position: fixed;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 100%;
-  block-size: 100px;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100px;
   background: linear-gradient(
     transparent,
     rgba(0, 255, 255, 0.1),
@@ -146,8 +146,8 @@ canvas {
 }
 
 *::-webkit-scrollbar {
-  inline-size: 12px;
-  block-size: 12px;
+  width: 12px;
+  height: 12px;
 }
 
 *::-webkit-scrollbar-track {
@@ -187,7 +187,7 @@ canvas {
 }
 
 .wolf-scroll::-webkit-scrollbar {
-  inline-size: 14px;
+  width: 14px;
 }
 
 .wolf-scroll::-webkit-scrollbar-track {
@@ -409,7 +409,7 @@ canvas {
 }
 
 .wolf-scroll::-webkit-scrollbar {
-  inline-size: 2px;
+  width: 2px;
 }
 
 .wolf-scroll::-webkit-scrollbar-thumb {
@@ -442,7 +442,7 @@ canvas {
 
 /* Rune divider line */
 .rune-divider {
-  block-size: 1px;
+  height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
@@ -703,8 +703,8 @@ button:disabled,
 
 /* Tracking effect (wolf chasing) */
 @keyframes track {
-  0% { inset-inline-start: -10%; }
-  100% { inset-inline-start: 110%; }
+  0% { left: -10%; }
+  100% { left: 110%; }
 }
 
 .tracking-indicator {

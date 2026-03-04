@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+﻿import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { calculateOrbitalPositionByT, epochYearToT } from '../ml/OrbitalMechanics';
@@ -146,7 +146,7 @@ export function ApophisPanel() {
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#c0d8ff' }}>
-      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#88ccff', marginBottom: '6px', letterSpacing: '0.08em' }}>
+      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#88ccff', marginBlockEnd: '6px', letterSpacing: '0.08em' }}>
         99942 APOPHIS — 2029 Earth Flyby
       </div>
       <div style={{
@@ -154,7 +154,7 @@ export function ApophisPanel() {
         background: 'rgba(0,200,255,0.07)',
         border: '1px solid rgba(100,200,255,0.25)',
         borderRadius: '5px',
-        marginBottom: '8px',
+        marginBlockEnd: '8px',
         fontSize: '9px',
         color: '#aaddff',
         lineHeight: 1.5,
@@ -165,7 +165,7 @@ export function ApophisPanel() {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {stats.map(({ label, value }) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(100,180,255,0.1)', paddingBottom: '2px' }}>
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBlockEnd: '1px solid rgba(100,180,255,0.1)', paddingBottom: '2px' }}>
             <span style={{ opacity: 0.6 }}>{label}</span>
             <span style={{ color: label === 'Torino Scale' ? '#44ff88' : label === 'Close Approach' ? '#ffcc44' : '#c0e8ff', fontWeight: 'bold' }}>{value}</span>
           </div>

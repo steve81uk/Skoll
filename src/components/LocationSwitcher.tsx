@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 export interface LocationPreset {
   name: string;
@@ -72,7 +72,7 @@ export default function LocationSwitcher({ value, onChange }: LocationSwitcherPr
           fontFamily: 'inherit',
           cursor: 'pointer',
           outline: 'none',
-          maxWidth: '140px',
+          maxInlineSize: '140px',
         }}
         title="Observer location for aurora & localised forecasts"
       >

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
@@ -491,10 +491,12 @@ export default function App() {
         return <DSNLiveLink />;
       case 'kessler-net':
         return (
-          <KesslerNetStats
-            kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
-            cmeActive={cmeActive}
-          />
+          <div style={{ background:'rgba(6,10,22,0.78)', backdropFilter:'blur(22px) saturate(1.6)', WebkitBackdropFilter:'blur(22px) saturate(1.6)', border:'1px solid rgba(239,68,68,0.18)', borderRadius:'10px', padding:'10px 12px', boxShadow:'0 0 28px rgba(239,68,68,0.05),0 4px 20px rgba(0,0,0,0.55)' }}>
+            <KesslerNetStats
+              kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
+              cmeActive={cmeActive}
+            />
+          </div>
         );
       case 'data-alchemist':
         return (
@@ -505,6 +507,7 @@ export default function App() {
             loading={noaaDonki.loading}
             modelStatus={lstmWorker.modelStatus}
             modelUsed={lstmWorker.modelUsed}
+            fluxWm2={goesFlux.fluxWm2}
           />
         );
       case 'supermag':
@@ -535,7 +538,7 @@ export default function App() {
       case 'iss-track':
         return (
           <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#a0d4ff' }}>
-            <div style={{ marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.16em', fontSize: '9px', opacity: 0.6 }}>ISS Live Track</div>
+            <div style={{ marginBlockEnd: '8px', textTransform: 'uppercase', letterSpacing: '0.16em', fontSize: '9px', opacity: 0.6 }}>ISS Live Track</div>
             <button
               onClick={() => setShowISS((v) => !v)}
               style={{
@@ -552,7 +555,7 @@ export default function App() {
               {showISS ? '● ISS TRACKING ACTIVE' : '○ Enable ISS Tracking'}
             </button>
             {showISS && (
-              <div style={{ marginTop: '8px', fontSize: '9px', opacity: 0.65 }}>
+              <div style={{ marginBlockStart: '8px', fontSize: '9px', opacity: 0.65 }}>
                 Polling wheretheiss.at every 3 s · Trail: 180 pts
               </div>
             )}
@@ -561,7 +564,7 @@ export default function App() {
       case 'carrington-sim':
         return (
           <div style={{ fontFamily: 'monospace', fontSize: '10px' }}>
-            <div style={{ marginBottom: '8px' }}>
+            <div style={{ marginBlockEnd: '8px' }}>
               <button
                 onClick={() => {
                   setCarringtonActive((v) => !v);
@@ -581,7 +584,7 @@ export default function App() {
                   cursor: 'pointer',
                   fontSize: '10px',
                   fontFamily: 'monospace',
-                  marginBottom: '8px',
+                  marginBlockEnd: '8px',
                 }}
               >
                 {carringtonActive ? '⬛ Stop Simulation' : '▶ Start Carrington Replay'}
@@ -593,7 +596,7 @@ export default function App() {
       case 'apophis-tracker':
         return (
           <div style={{ fontFamily: 'monospace', fontSize: '10px' }}>
-            <div style={{ marginBottom: '8px' }}>
+            <div style={{ marginBlockEnd: '8px' }}>
               <button
                 onClick={() => setApophisVisible((v) => !v)}
                 style={{
@@ -605,7 +608,7 @@ export default function App() {
                   cursor: 'pointer',
                   fontSize: '10px',
                   fontFamily: 'monospace',
-                  marginBottom: '8px',
+                  marginBlockEnd: '8px',
                 }}
               >
                 {apophisVisible ? '⬛ Hide Apophis Orbit' : '▶ Show Apophis 2029 Flyby'}
@@ -649,7 +652,7 @@ export default function App() {
       case 'heliopause':
         return (
           <div style={{ fontFamily: 'monospace', fontSize: '10px' }}>
-            <div style={{ marginBottom: '8px', fontSize: '9px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Heliopause Boundary Shader</div>
+            <div style={{ marginBlockEnd: '8px', fontSize: '9px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Heliopause Boundary Shader</div>
             <button
               onClick={() => setHeliopauseVisible((v) => !v)}
               style={{
@@ -663,7 +666,7 @@ export default function App() {
               {heliopauseVisible ? '⬛ Hide Heliopause' : '▶ Show Heliopause Shell'}
             </button>
             {heliopauseVisible && (
-              <div style={{ marginTop: '6px', fontSize: '8px', opacity: 0.5 }}>
+              <div style={{ marginBlockStart: '6px', fontSize: '8px', opacity: 0.5 }}>
                 Termination shock: ~1 600 units · Heliopause: ~2 400 units
               </div>
             )}
@@ -678,7 +681,7 @@ export default function App() {
       case 'radio-blackout':
         return (
           <div style={{ fontFamily: 'monospace', fontSize: '10px' }}>
-            <div style={{ marginBottom: '8px', fontSize: '9px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.12em' }}>D-RAP Ionospheric Absorption</div>
+            <div style={{ marginBlockEnd: '8px', fontSize: '9px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.12em' }}>D-RAP Ionospheric Absorption</div>
             <button
               onClick={() => setBlackoutVisible((v) => !v)}
               style={{
@@ -692,10 +695,10 @@ export default function App() {
               {blackoutVisible ? '⬛ Hide Blackout Layer' : '▶ Show D-RAP Heatmap'}
             </button>
             {blackoutVisible && (
-              <div style={{ marginTop: '8px', fontSize: '8px', opacity: 0.5, lineHeight: 1.6 }}>
+              <div style={{ marginBlockStart: '8px', fontSize: '8px', opacity: 0.5, lineHeight: 1.6 }}>
                 <div>Class: <span style={{ color: '#ff8c42' }}>{goesFlux.flareClass}</span></div>
                 <div>Flux: {goesFlux.fluxWm2.toExponential(2)} W/m²</div>
-                <div style={{ marginTop: 4, opacity: 0.6 }}>Orange overlay = HF radio blackout zone (sunlit hemisphere). Equatorial paths most affected.</div>
+                <div style={{ marginBlockStart: 4, opacity: 0.6 }}>Orange overlay = HF radio blackout zone (sunlit hemisphere). Equatorial paths most affected.</div>
               </div>
             )}
           </div>
@@ -1096,7 +1099,7 @@ export default function App() {
               )}
             </Suspense>
 
-            <OrbitControls enablePan enableZoom makeDefault minDistance={20} maxDistance={4000} />
+            <OrbitControls enablePan enableZoom makeDefault minDistance={0.1} maxDistance={100000} />
             (
               <Suspense fallback={null}>
                 <LazyCinematicPostFX
@@ -1449,7 +1452,7 @@ export default function App() {
                       </button>
                     </div>
                     <div className="max-h-[34vh] overflow-y-auto wolf-scroll pr-1">
-                      {renderSubmenuContent(activeSubTileId)}
+                        {renderSubmenuContent(activeSubTileId)}
                     </div>
                   </motion.div>
                 )}

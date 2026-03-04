@@ -1,4 +1,4 @@
-/**
+﻿/**
  * EarthCoreDynamo — R3F GLSL Earth interior + magnetic dipole field
  *
  * Hierarchy:
@@ -293,7 +293,7 @@ export function EarthDynamoPanel({ kpIndex = 2, visible = true }: EarthDynamoPan
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#b0c8d4' }}>
-      <div style={{ marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.13em', fontSize: '9px', opacity: 0.55 }}>
+      <div style={{ marginBlockEnd: '8px', textTransform: 'uppercase', letterSpacing: '0.13em', fontSize: '9px', opacity: 0.55 }}>
         Earth Core Dynamo
       </div>
 
@@ -313,7 +313,7 @@ export function EarthDynamoPanel({ kpIndex = 2, visible = true }: EarthDynamoPan
         ))}
       </div>
 
-      <div style={{ marginTop: '10px', padding: '6px 8px', background: 'rgba(56,189,248,0.06)', borderRadius: '6px', border: '1px solid rgba(56,189,248,0.15)', fontSize: '9px', opacity: 0.65, lineHeight: 1.6 }}>
+      <div style={{ marginBlockStart: '10px', padding: '6px 8px', background: 'rgba(56,189,248,0.06)', borderRadius: '6px', border: '1px solid rgba(56,189,248,0.15)', fontSize: '9px', opacity: 0.65, lineHeight: 1.6 }}>
         The geodynamo converts convective heat energy in the liquid outer core into the
         geomagnetic field that shields Earth from solar wind. Elevated Kp indicates
         external field compression.

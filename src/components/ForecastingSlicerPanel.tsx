@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 
 /**
  * ForecastingSlicerPanel.tsx
@@ -91,14 +91,14 @@ export default function ForecastingSlicerPanel({ kpIndex = 2, forecast }: Foreca
           gap:           6,
           padding:       '7px 10px 6px',
           background:    `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`,
-          borderBottom:  `1px solid ${ACCENT}22`,
+          borderBlockEnd:  `1px solid ${ACCENT}22`,
         }}
       >
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACCENT, display: 'inline-block', boxShadow: `0 0 6px ${ACCENT}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>
           Forecast Confidence
         </span>
-        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '0.1em', marginLeft: 'auto' }}>
+        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '0.1em', marginInlineStart: 'auto' }}>
           Kp {kp.toFixed(1)}
         </span>
       </div>
@@ -110,9 +110,9 @@ export default function ForecastingSlicerPanel({ kpIndex = 2, forecast }: Foreca
           const barWidth = `${Math.round(row.conf * 100)}%`;
 
           return (
-            <div key={row.label} style={{ marginBottom: '5px' }}>
+            <div key={row.label} style={{ marginBlockEnd: '5px' }}>
               {/* Label + percentage */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBlockEnd: '2px' }}>
                 <span style={{ fontSize: '8px', opacity: 0.65, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                   {row.label}
                 </span>
@@ -137,7 +137,7 @@ export default function ForecastingSlicerPanel({ kpIndex = 2, forecast }: Foreca
 
               {/* LSTM predicted-value bar (if provided) */}
               {row.predicted !== null && (
-                <div style={{ position: 'relative', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.03)', overflow: 'hidden', marginTop: '2px' }}>
+                <div style={{ position: 'relative', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.03)', overflow: 'hidden', marginBlockStart: '2px' }}>
                   <div
                     style={{
                       position:     'absolute', left: 0, top: 0, height: '100%',
@@ -163,7 +163,7 @@ export default function ForecastingSlicerPanel({ kpIndex = 2, forecast }: Foreca
           fontSize:      '7px',
           opacity:       0.38,
           padding:       '5px 10px 7px',
-          borderTop:     '1px solid rgba(255,255,255,0.06)',
+          borderBlockStart:     '1px solid rgba(255,255,255,0.06)',
           letterSpacing: '0.07em',
           textTransform: 'uppercase',
         }}

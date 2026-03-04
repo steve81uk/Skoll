@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ISSCameraStream — ISS HD Earth Viewing live embed + DOM panel
  *
  * Exports:
@@ -68,7 +68,7 @@ export function ISSCameraPanel({ visible = true }: ISSCameraPanelProps) {
           gap:           '8px',
           padding:       '5px 10px',
           background:    'rgba(56,189,248,0.05)',
-          borderBottom:  '1px solid rgba(56,189,248,0.12)',
+          borderBlockEnd:  '1px solid rgba(56,189,248,0.12)',
           flexShrink:    0,
         }}
       >
@@ -89,7 +89,7 @@ export function ISSCameraPanel({ visible = true }: ISSCameraPanelProps) {
         <button
           onClick={() => setIsLive((v) => !v)}
           style={{
-            marginLeft:    'auto',
+            marginInlineStart:    'auto',
             background:    'transparent',
             border:        '1px solid rgba(56,189,248,0.2)',
             borderRadius:  '4px',
@@ -154,7 +154,7 @@ export function ISSCameraPanel({ visible = true }: ISSCameraPanelProps) {
         style={{
           padding:       '4px 10px',
           background:    'rgba(56,189,248,0.03)',
-          borderTop:     '1px solid rgba(56,189,248,0.08)',
+          borderBlockStart:     '1px solid rgba(56,189,248,0.08)',
           fontSize:      '8px',
           color:         'rgba(176,200,212,0.4)',
           fontFamily:    'monospace',

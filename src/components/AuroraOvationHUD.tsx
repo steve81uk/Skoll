@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+﻿import { useEffect, useState, useRef, useCallback } from 'react';
 
 /**
  * AuroraOvationHUD.tsx
@@ -156,10 +156,10 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
       }}
     >
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBottom: `1px solid ${ACCENT}22` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: stormCol, display: 'inline-block', boxShadow: `0 0 6px ${stormCol}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>OVATION Prime</span>
-        <span style={{ fontSize: '7px', opacity: 0.35, marginLeft: 'auto', letterSpacing: '0.1em' }}>
+        <span style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', letterSpacing: '0.1em' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC` : 'Pending'}
         </span>
       </div>
@@ -186,7 +186,7 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {/* Kp bar */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBlockEnd: '2px' }}>
               <span style={{ fontSize: '8px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Kp Index</span>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: stormCol }}>{kp.toFixed(1)}</span>
             </div>
@@ -208,7 +208,7 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
           </div>
 
           {/* HPI */}
-          <div style={{ fontSize: '8px', display: 'flex', gap: '6px', marginTop: '2px' }}>
+          <div style={{ fontSize: '8px', display: 'flex', gap: '6px', marginBlockStart: '2px' }}>
             <span style={{ opacity: 0.45, textTransform: 'uppercase', letterSpacing: '0.07em' }}>HPI:</span>
             <span>N {hpiNorth !== undefined ? `${Math.round(hpiNorth)} GW` : '—'}</span>
             <span style={{ opacity: 0.4 }}>·</span>
@@ -216,7 +216,7 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
           </div>
 
           {/* Storm scale */}
-          <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
+          <div style={{ display: 'flex', gap: '3px', marginBlockStart: '2px' }}>
             {['G1','G2','G3','G4','G5'].map((g, i) => {
               const threshold = [5, 6, 7, 8, 9][i];
               const active    = kp >= threshold;
@@ -237,7 +237,7 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
       </div>
 
       {error && (
-        <div style={{ padding: '4px 10px 6px', fontSize: '7px', opacity: 0.4, borderTop: '1px solid rgba(255,255,255,0.05)', color: '#ff8c42' }}>
+        <div style={{ padding: '4px 10px 6px', fontSize: '7px', opacity: 0.4, borderBlockStart: '1px solid rgba(255,255,255,0.05)', color: '#ff8c42' }}>
           ⚠ {error}
         </div>
       )}

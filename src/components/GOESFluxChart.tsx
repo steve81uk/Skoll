@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+﻿import { useEffect, useRef, useState, useCallback } from 'react';
 
 /**
  * GOESFluxChart.tsx
@@ -202,10 +202,10 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBottom: `1px solid ${ACCENT}22` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: flareClass.color, display: 'inline-block', boxShadow: `0 0 6px ${flareClass.color}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>GOES X-Ray Flux</span>
-        <span style={{ fontSize: '7px', opacity: 0.35, marginLeft: 'auto' }}>
+        <span style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Pending'}
         </span>
       </div>
@@ -218,7 +218,7 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
           height={80}
           style={{ width: '100%', height: '80px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.06)', display: 'block' }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7px', opacity: 0.3, marginTop: '2px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7px', opacity: 0.3, marginBlockStart: '2px' }}>
           <span>−4 h</span><span style={{ letterSpacing: '0.08em' }}>log flux (W/m²)</span><span>Now</span>
         </div>
       </div>
@@ -226,23 +226,23 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', padding: '8px 10px 10px' }}>
         <div>
-          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Current flux</div>
+          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBlockEnd: 2 }}>Current flux</div>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: flareClass.color }}>{flareClass.label}-class</div>
           <div style={{ fontSize: '7px', opacity: 0.55 }}>{formatFlux(latestFlux)} W/m²</div>
         </div>
         <div>
-          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Peak (4 h)</div>
+          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBlockEnd: 2 }}>Peak (4 h)</div>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: peakClass.color }}>{peakClass.label}-class</div>
           <div style={{ fontSize: '7px', opacity: 0.55 }}>{formatFlux(peakFlux)} W/m²</div>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Radio blackout risk</div>
+          <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBlockEnd: 2 }}>Radio blackout risk</div>
           <div style={{ fontSize: '9px', color: flareClass.color }}>{flareClass.blackout}</div>
         </div>
       </div>
 
       {/* Channel legend */}
-      <div style={{ display: 'flex', gap: '10px', padding: '5px 10px 7px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '7px', opacity: 0.45 }}>
+      <div style={{ display: 'flex', gap: '10px', padding: '5px 10px 7px', borderBlockStart: '1px solid rgba(255,255,255,0.06)', fontSize: '7px', opacity: 0.45 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span style={{ width: 12, height: 2, background: '#ff8c42', display: 'inline-block', borderRadius: 1 }} />
           1–8 Å (XRSB)
@@ -256,7 +256,7 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
       </div>
 
       {error && (
-        <div style={{ padding: '3px 10px 6px', fontSize: '7px', color: '#ff8c42', opacity: 0.5, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ padding: '3px 10px 6px', fontSize: '7px', color: '#ff8c42', opacity: 0.5, borderBlockStart: '1px solid rgba(255,255,255,0.05)' }}>
           ⚠ {error}
         </div>
       )}

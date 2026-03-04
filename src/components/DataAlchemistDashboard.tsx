@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — DATA ALCHEMIST DASHBOARD v1.0
  * Multi-panel LSTM telemetry correlation engine.
  *
@@ -12,7 +12,10 @@
  * All data sourced from useLSTMWorker + useNOAADONKI hooks or props.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import SolarWindScatter from './SolarWindScatter';
+import DRAPAbsorptionGraph from './DRAPAbsorptionGraph';
+import KpForecastMatrix from './KpForecastMatrix';
 import {
   AreaChart, Area, BarChart, Bar, ScatterChart, Scatter, LineChart, Line,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -58,6 +61,7 @@ export interface DataAlchemistProps {
   loading:     boolean;
   modelStatus: 'loading' | 'loaded' | 'simulated' | 'error';
   modelUsed:   string;
+  fluxWm2?:    number;
 }
 
 // ─── Feature Importance Weights (derived from LSTM gradient analysis) ─────────
@@ -82,7 +86,7 @@ function fmtTime(iso: string) {
 function FeatureImportance({ modelUsed }: { modelUsed: string }) {
   return (
     <div style={PANEL}>
-      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBottom:'8px', fontFamily:'"Rajdhani",monospace' }}>
+      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'8px', fontFamily:'"Rajdhani",monospace' }}>
         LSTM FEATURE IMPORTANCE  /  {modelUsed.toUpperCase()}
       </div>
       <ResponsiveContainer width="100%" height={110}>
@@ -119,7 +123,7 @@ function KPForecastStack({ kpSeries, kpCurve24h }: { kpSeries: KPPoint[]; kpCurv
 
   return (
     <div style={PANEL}>
-      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBottom:'8px', fontFamily:'"Rajdhani",monospace' }}>
+      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'8px', fontFamily:'"Rajdhani",monospace' }}>
         KP OBSERVED  +  12H LSTM PROJECTION
       </div>
       <ResponsiveContainer width="100%" height={120}>
@@ -156,7 +160,7 @@ function SolarWindStack({ bundle }: { bundle: NOAABundle | null }) {
 
   return (
     <div style={PANEL}>
-      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBottom:'8px', fontFamily:'"Rajdhani",monospace' }}>
+      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'8px', fontFamily:'"Rajdhani",monospace' }}>
         SOLAR WIND PARAMETER EVOLUTION
       </div>
       <ResponsiveContainer width="100%" height={140}>
@@ -209,7 +213,7 @@ function ConfidenceRadar({ forecast }: { forecast: NeuralForecast | null }) {
 
   return (
     <div style={PANEL}>
-      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBottom:'4px', fontFamily:'"Rajdhani",monospace' }}>
+      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'4px', fontFamily:'"Rajdhani",monospace' }}>
         PREDICTION CONFIDENCE DECOMPOSITION
       </div>
       <ResponsiveContainer width="100%" height={200}>
@@ -237,7 +241,7 @@ function StormProbScatter({ forecast }: { forecast: NeuralForecast | null }) {
 
   return (
     <div style={PANEL}>
-      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBottom:'8px', fontFamily:'"Rajdhani",monospace' }}>
+      <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'8px', fontFamily:'"Rajdhani",monospace' }}>
         KP vs STORM PROBABILITY NEXUS
       </div>
       <ResponsiveContainer width="100%" height={120}>
@@ -257,7 +261,7 @@ function StormProbScatter({ forecast }: { forecast: NeuralForecast | null }) {
       </ResponsiveContainer>
 
       {/* Window table */}
-      <div style={{ display:'flex', gap:'6px', marginTop:'6px' }}>
+      <div style={{ display:'flex', gap:'6px', marginBlockStart:'6px' }}>
         {points.map((p) => {
           const c = p.prob >= 50 ? '#ef4444' : p.prob >= 25 ? '#f97316' : '#22c55e';
           return (
@@ -290,7 +294,7 @@ function LiveMetrics({ bundle }: { bundle: NOAABundle | null }) {
   return (
     <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
       {metrics.map(({ label, val, color }) => (
-        <div key={label} style={{ flex:1, minWidth:'72px', background:'rgba(0,20,50,0.5)',
+        <div key={label} style={{ flex:1, minInlineSize:'72px', background:'rgba(0,20,50,0.5)',
           border:`1px solid rgba(0,200,255,0.12)`, borderRadius:'6px', padding:'5px 8px' }}>
           <div style={{ fontSize:'9px', color:C.text, fontFamily:'monospace' }}>{label}</div>
           <div style={{ fontSize:'14px', fontWeight:700, color, fontFamily:'"Rajdhani",monospace' }}>{val}</div>
@@ -300,15 +304,42 @@ function LiveMetrics({ bundle }: { bundle: NOAABundle | null }) {
   );
 }
 
+// ─── Tab button style ─────────────────────────────────────────────────────────
+function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: '5px 0',
+        fontSize: '9px',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        fontFamily: 'monospace',
+        cursor: 'pointer',
+        border: 'none',
+        borderBlockEnd: active ? '2px solid #60c8ff' : '2px solid transparent',
+        background: active ? 'rgba(96,200,255,0.08)' : 'transparent',
+        color: active ? '#60c8ff' : 'rgba(140,170,200,0.5)',
+        transition: 'all 0.18s',
+        borderRadius: '4px 4px 0 0',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function DataAlchemistDashboard({
-  forecast, kpCurve24h, bundle, loading, modelStatus, modelUsed,
+  forecast, kpCurve24h, bundle, loading, modelStatus, modelUsed, fluxWm2 = 1e-7,
 }: DataAlchemistProps) {
   const kpSeries = bundle?.kpSeries ?? [];
+  const [activeTab, setActiveTab] = useState<'analysis' | 'forecasting'>('analysis');
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'10px', padding:'8px',
-      fontFamily:'"Rajdhani","Share Tech Mono",monospace', minWidth:'340px', maxWidth:'540px' }}>
+      fontFamily:'"Rajdhani","Share Tech Mono",monospace', minInlineSize:'340px', maxInlineSize:'560px' }}>
 
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -323,12 +354,32 @@ export function DataAlchemistDashboard({
         </div>
       </div>
 
-      <LiveMetrics bundle={bundle} />
-      <FeatureImportance modelUsed={modelUsed} />
-      <KPForecastStack kpSeries={kpSeries} kpCurve24h={kpCurve24h} />
-      <SolarWindStack bundle={bundle} />
-      <ConfidenceRadar forecast={forecast} />
-      <StormProbScatter forecast={forecast} />
+      {/* Tabs */}
+      <div style={{ display:'flex', borderBlockEnd:'1px solid rgba(96,200,255,0.12)', gap:'2px' }}>
+        <TabBtn label="LSTM Analysis"    active={activeTab === 'analysis'}    onClick={() => setActiveTab('analysis')} />
+        <TabBtn label="Forecasting Data" active={activeTab === 'forecasting'} onClick={() => setActiveTab('forecasting')} />
+      </div>
+
+      {/* LSTM Analysis tab */}
+      {activeTab === 'analysis' && (
+        <>
+          <LiveMetrics bundle={bundle} />
+          <FeatureImportance modelUsed={modelUsed} />
+          <KPForecastStack kpSeries={kpSeries} kpCurve24h={kpCurve24h} />
+          <SolarWindStack bundle={bundle} />
+          <ConfidenceRadar forecast={forecast} />
+          <StormProbScatter forecast={forecast} />
+        </>
+      )}
+
+      {/* Forecasting Data tab */}
+      {activeTab === 'forecasting' && (
+        <>
+          <SolarWindScatter bundle={bundle} />
+          <DRAPAbsorptionGraph fluxWm2={fluxWm2} />
+          <KpForecastMatrix kpCurve24h={kpCurve24h} kpNow={bundle?.latestKp ?? 2} />
+        </>
+      )}
     </div>
   );
 }

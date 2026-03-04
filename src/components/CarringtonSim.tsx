@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+﻿import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -80,7 +80,7 @@ export function CarringtonPanel({ simulationTimeS }: CarringtonPanelProps) {
           { label: 'Auroral Oval',  value: '20°',                         unit: ' lat',   warn: true },
           { label: 'Telegraph fail', value: '100',                         unit: '%',      warn: true },
         ].map(({ label, value, unit, warn }) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,100,0,0.15)', paddingBottom: '2px' }}>
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBlockEnd: '1px solid rgba(255,100,0,0.15)', paddingBottom: '2px' }}>
             <span style={{ opacity: 0.65 }}>{label}</span>
             <span style={{ color: warn ? '#ff5500' : '#ffcc88', fontWeight: 'bold' }}>{value}{unit}</span>
           </div>
@@ -89,7 +89,7 @@ export function CarringtonPanel({ simulationTimeS }: CarringtonPanelProps) {
 
       {/* Infrastructure grid */}
       <div>
-        <div style={{ fontSize: '8px', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.16em', marginBottom: '4px' }}>
+        <div style={{ fontSize: '8px', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.16em', marginBlockEnd: '4px' }}>
           Grid Infrastructure Impact (Modern Scenario)
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '120px', overflowY: 'auto' }}>
@@ -101,18 +101,18 @@ export function CarringtonPanel({ simulationTimeS }: CarringtonPanelProps) {
                 height: '6px',
                 background: color,
                 borderRadius: '2px',
-                minWidth: '4px',
+                minInlineSize: '4px',
                 boxShadow: `0 0 4px ${color}88`,
               }} />
               <span style={{ color, fontSize: '8px', width: '24px', textAlign: 'right' }}>{pct}%</span>
-              <span style={{ color, fontSize: '7px', minWidth: '70px', opacity: 0.8 }}>{status}</span>
+              <span style={{ color, fontSize: '7px', minInlineSize: '70px', opacity: 0.8 }}>{status}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Historical note */}
-      <div style={{ borderTop: '1px solid rgba(255,100,0,0.2)', paddingTop: '6px', fontSize: '9px', opacity: 0.55, lineHeight: 1.5 }}>
+      <div style={{ borderBlockStart: '1px solid rgba(255,100,0,0.2)', paddingTop: '6px', fontSize: '9px', opacity: 0.55, lineHeight: 1.5 }}>
         Sep 1, 1859: Carrington observed white-light solar flare. Telegraphs in US & Europe operated
         without batteries from induced currents. Aurora visible at 20°N latitude tropical regions.
         Modern equivalent: $2–20 trillion economic damage; 40M without power for months.

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — KESSLER NET
  * Three.js InstancedMesh orbital debris visualiser.
  *
@@ -160,19 +160,19 @@ function KesslerHUD({ kpIndex, cmeActive }: KesslerHUDProps) {
         borderRadius:  '8px',
         padding:       '10px 14px',
         fontFamily:    '"Rajdhani","Share Tech Mono",monospace',
-        minWidth:      '180px',
+        minInlineSize:      '180px',
         backdropFilter:'blur(8px)',
       }}>
-        <div style={{ fontSize:'11px', color:'#60c8ff', marginBottom:'6px' }}>KESSLER NET  /  DEBRIS FIELD</div>
+        <div style={{ fontSize:'11px', color:'#60c8ff', marginBlockEnd:'6px' }}>KESSLER NET  /  DEBRIS FIELD</div>
         <div style={{ fontSize:'24px', fontWeight:900, color:'#cce8ff', lineHeight:1, fontFamily:'"Rajdhani",monospace' }}>
           {totalDebris.toLocaleString()}
         </div>
-        <div style={{ fontSize:'9px', color:'#7fa8c8', fontFamily:'monospace', marginBottom:'8px' }}>
+        <div style={{ fontSize:'9px', color:'#7fa8c8', fontFamily:'monospace', marginBlockEnd:'8px' }}>
           TRACKED OBJECTS  (modelled)
         </div>
 
         {DEBRIS_SHELLS.map((sh) => (
-          <div key={sh.name} style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px' }}>
+          <div key={sh.name} style={{ display:'flex', alignItems:'center', gap:'6px', marginBlockEnd:'2px' }}>
             <div style={{ width:'8px', height:'8px', borderRadius:'50%',
               background:`#${sh.color.toString(16).padStart(6,'0')}`, flexShrink:0 }} />
             <span style={{ fontSize:'10px', color:'#aac8e8', fontFamily:'monospace', flex:1 }}>{sh.name}</span>
@@ -180,14 +180,14 @@ function KesslerHUD({ kpIndex, cmeActive }: KesslerHUDProps) {
           </div>
         ))}
 
-        <div style={{ marginTop:'8px', padding:'6px', background:`${dangerColor}18`,
+        <div style={{ marginBlockStart:'8px', padding:'6px', background:`${dangerColor}18`,
           borderRadius:'4px', border:`1px solid ${dangerColor}44` }}>
           <div style={{ fontSize:'9px', color:'rgba(150,200,255,0.7)', fontFamily:'monospace' }}>COLLISION RISK</div>
           <div style={{ fontSize:'16px', fontWeight:700, color:dangerColor, fontFamily:'"Rajdhani",monospace' }}>
             {dangerLevel}  {collisionRisk.toFixed(0)}%
           </div>
           {cmeActive && (
-            <div style={{ fontSize:'9px', color:'#ef4444', fontFamily:'monospace', marginTop:'2px' }}>
+            <div style={{ fontSize:'9px', color:'#ef4444', fontFamily:'monospace', marginBlockStart:'2px' }}>
               ⚠ CME IMPACT — IONOSPHERE CHARGED
             </div>
           )}
@@ -239,7 +239,7 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
 
   return (
     <div style={{ fontFamily:'"Rajdhani","Share Tech Mono",monospace', padding:'4px 0' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBlockEnd:'10px' }}>
         <div>
           <div style={{ fontSize:'28px', fontWeight:900, color:'#cce8ff', lineHeight:1, fontFamily:'"Rajdhani",monospace' }}>
             {totalDebris.toLocaleString()}
@@ -261,7 +261,7 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
           const col = `#${sh.color.toString(16).padStart(6,'0')}`;
           return (
             <div key={sh.name}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'2px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBlockEnd:'2px' }}>
                 <span style={{ fontSize:'10px', color:col, fontFamily:'monospace' }}>{sh.name}</span>
                 <span style={{ fontSize:'10px', color:'#cce8ff', fontFamily:'monospace',
                   display:'flex', gap:'8px' }}>
@@ -283,9 +283,9 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
       </div>
 
       {/* Kessler cascade probability */}
-      <div style={{ marginTop:'10px', padding:'8px', background:'rgba(0,20,50,0.6)',
+      <div style={{ marginBlockStart:'10px', padding:'8px', background:'rgba(0,20,50,0.6)',
         borderRadius:'6px', border:'1px solid rgba(0,200,255,0.12)' }}>
-        <div style={{ fontSize:'10px', color:'#7fa8c8', fontFamily:'monospace', marginBottom:'4px' }}>
+        <div style={{ fontSize:'10px', color:'#7fa8c8', fontFamily:'monospace', marginBlockEnd:'4px' }}>
           KESSLER CASCADE THRESHOLD
         </div>
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
@@ -295,7 +295,7 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
             { label:'Est. Growth', val:'+5%/yr',         color:'#eab308' },
             { label:'Iridium Zone', val:'LEO-B: SATU',   color:'#60c8ff' },
           ].map(({ label, val, color }) => (
-            <div key={label} style={{ flex:1, minWidth:'80px', background:'rgba(0,10,30,0.6)',
+            <div key={label} style={{ flex:1, minInlineSize:'80px', background:'rgba(0,10,30,0.6)',
               borderRadius:'4px', padding:'4px 6px' }}>
               <div style={{ fontSize:'9px', color:'rgba(100,150,200,0.7)', fontFamily:'monospace' }}>{label}</div>
               <div style={{ fontSize:'12px', color, fontFamily:'monospace' }}>{val}</div>
@@ -303,7 +303,7 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
           ))}
         </div>
         {cmeActive && (
-          <div style={{ marginTop:'6px', fontSize:'10px', color:'#ef4444', fontFamily:'monospace',
+          <div style={{ marginBlockStart:'6px', fontSize:'10px', color:'#ef4444', fontFamily:'monospace',
             padding:'4px 6px', background:'rgba(239,68,68,0.1)', borderRadius:'4px' }}>
             ⚠ ACTIVE CME: Atmospheric drag increase in LEO — orbital decay rate elevated
           </div>

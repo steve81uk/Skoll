@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TooltipContext.tsx — Global CosmicTooltip provider
  *
  * Holds a single floating tooltip that any component in the tree can
@@ -148,13 +148,13 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
             </div>
 
             {/* Description */}
-            <div style={{ fontSize: '10px', lineHeight: 1.6, color: '#c8dce8', borderTop: `1px solid ${accent}22`, paddingTop: '6px' }}>
+            <div style={{ fontSize: '10px', lineHeight: 1.6, color: '#c8dce8', borderBlockStart: `1px solid ${accent}22`, paddingTop: '6px' }}>
               {state.content.description}
             </div>
 
             {/* Live metrics (optional) */}
             {state.content.metrics && state.content.metrics.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderTop: `1px solid ${accent}22`, paddingTop: '5px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderBlockStart: `1px solid ${accent}22`, paddingTop: '5px' }}>
                 {state.content.metrics.map((m) => (
                   <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', gap: '6px' }}>
                     <span style={{ color: '#6a8ea0', flexShrink: 0 }}>{m.label}</span>
@@ -163,7 +163,7 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
                       {m.unit ? <span style={{ color: '#5a7a8a', fontWeight: 400 }}> {m.unit}</span> : null}
                     </span>
                     {m.description && (
-                      <span style={{ color: '#4a6070', fontSize: '8px', flexShrink: 0, maxWidth: '90px', textAlign: 'right' }}>
+                      <span style={{ color: '#4a6070', fontSize: '8px', flexShrink: 0, maxInlineSize: '90px', textAlign: 'right' }}>
                         {m.description}
                       </span>
                     )}

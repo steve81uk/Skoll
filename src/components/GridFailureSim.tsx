@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+﻿import { useState, useMemo, useEffect, useRef } from 'react';
 
 /**
  * GridFailureSim.tsx
@@ -261,14 +261,14 @@ export default function GridFailureSim({ goesFluxWm2 = 1e-8, autoSimulate = fals
       }}
     >
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBottom: `1px solid ${ACCENT}22` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: flareCol, display: 'inline-block', boxShadow: `0 0 6px ${flareCol}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>Grid Failure Sim</span>
-        <span style={{ marginLeft: 'auto', fontSize: '8px', color: flareCol, fontWeight: 'bold', letterSpacing: '0.08em' }}>{flareStr}-class</span>
+        <span style={{ marginInlineStart: 'auto', fontSize: '8px', color: flareCol, fontWeight: 'bold', letterSpacing: '0.08em' }}>{flareStr}-class</span>
       </div>
 
       {/* ── Summary bar ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: 'rgba(255,255,255,0.04)', borderBottom: `1px solid ${ACCENT}18` }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: 'rgba(255,255,255,0.04)', borderBlockEnd: `1px solid ${ACCENT}18` }}>
         {[
           { label: 'Affected',  val: totalAffected,           unit: ' nodes' },
           { label: 'Warning',   val: totalWarning,            unit: ' nodes' },
@@ -282,7 +282,7 @@ export default function GridFailureSim({ goesFluxWm2 = 1e-8, autoSimulate = fals
       </div>
 
       {/* ── Cascade controls ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: `1px solid rgba(255,255,255,0.06)` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBlockEnd: `1px solid rgba(255,255,255,0.06)` }}>
         {!simActive ? (
           <button
             onClick={() => { setSimActive(true); setCascadeStep(0); }}
@@ -316,14 +316,14 @@ export default function GridFailureSim({ goesFluxWm2 = 1e-8, autoSimulate = fals
               key={node.id}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '4px 6px', marginBottom: '2px', borderRadius: '5px',
+                padding: '4px 6px', marginBlockEnd: '2px', borderRadius: '5px',
                 background: isHL ? `${col}15` : node.status !== 'online' ? `${col}0a` : 'rgba(255,255,255,0.02)',
                 border: `1px solid ${isHL ? col + '60' : node.status !== 'online' ? col + '35' : 'rgba(100,150,200,0.10)'}`,
               }}
             >
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: col, flexShrink: 0, boxShadow: node.status !== 'online' ? `0 0 5px ${col}` : 'none',
                 animation: node.status === 'offline' ? 'gridPulse 0.9s ease-in-out infinite' : 'none' }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ flex: 1, minInlineSize: 0 }}>
                 <div style={{ fontSize: '8px', fontWeight: isHL ? 'bold' : 'normal', color: isHL ? col : '#c0d8f0', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {node.name}
                 </div>
@@ -339,7 +339,7 @@ export default function GridFailureSim({ goesFluxWm2 = 1e-8, autoSimulate = fals
       </div>
 
       {/* ── Legend ── */}
-      <div style={{ display: 'flex', gap: '8px 14px', flexWrap: 'wrap', padding: '5px 10px 7px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '7px', opacity: 0.38, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ display: 'flex', gap: '8px 14px', flexWrap: 'wrap', padding: '5px 10px 7px', borderBlockStart: '1px solid rgba(255,255,255,0.06)', fontSize: '7px', opacity: 0.38, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {(Object.entries(STATUS_COLORS) as [NodeStatus, string][]).map(([s, c]) => (
           <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: c, display: 'inline-block' }} />

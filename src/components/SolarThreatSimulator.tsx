@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 
 /**
  * SolarThreatSimulator.tsx
@@ -105,7 +105,7 @@ export default function SolarThreatSimulator({ onLaunchCME, isActive = false }: 
 
       {/* Presets */}
       <div>
-        <div style={{ fontSize: '8px', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '4px' }}>Historical Presets</div>
+        <div style={{ fontSize: '8px', opacity: 0.55, letterSpacing: '0.12em', textTransform: 'uppercase', marginBlockEnd: '4px' }}>Historical Presets</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
           {PRESETS.map((p) => (
             <button
@@ -210,7 +210,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 );
 
 const Value = ({ children, color }: { children: React.ReactNode; color?: string }) => (
-  <span style={{ fontSize: '10px', fontWeight: 'bold', color: color ?? '#a0d8ff', textAlign: 'right', minWidth: '60px' }}>{children}</span>
+  <span style={{ fontSize: '10px', fontWeight: 'bold', color: color ?? '#a0d8ff', textAlign: 'right', minInlineSize: '60px' }}>{children}</span>
 );
 
 import React from 'react';

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — LSTM PREDICTIVE GRAPH
  * Recharts visualisation of NOAA/DONKI data + LSTM 24-h KP forecast.
  *
@@ -95,7 +95,7 @@ function KPChart({ kpSeries, kpCurve24h, forecast }: KPChartProps) {
 
   return (
     <div style={PANEL_STYLE}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBlockEnd:'8px' }}>
         <span style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em' }}>
           24-H KP FORECAST /  LSTM
         </span>
@@ -172,7 +172,7 @@ function KPChart({ kpSeries, kpCurve24h, forecast }: KPChartProps) {
 
       {/* 6 / 12 / 24-h badges */}
       {forecast && (
-        <div style={{ display:'flex', gap:'8px', marginTop:'8px', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:'8px', marginBlockStart:'8px', flexWrap:'wrap' }}>
           {[
             { label:'+6h',  kp: pred6h,  conf: forecast.predictions.sixHour.confidenceInterval },
             { label:'+12h', kp: pred12h, conf: forecast.predictions.twelveHour.confidenceInterval },
@@ -180,10 +180,10 @@ function KPChart({ kpSeries, kpCurve24h, forecast }: KPChartProps) {
           ].map(({ label, kp, conf: ci }) => {
             const sl   = stormLevel(kp ?? 0);
             return (
-              <div key={label} style={{ flex:1, minWidth:'72px', textAlign:'center', background:'rgba(0,20,50,0.6)', borderRadius:'6px', padding:'5px 4px', border:`1px solid ${sl.color}44` }}>
+              <div key={label} style={{ flex:1, minInlineSize:'72px', textAlign:'center', background:'rgba(0,20,50,0.6)', borderRadius:'6px', padding:'5px 4px', border:`1px solid ${sl.color}44` }}>
                 <div style={{ fontSize:'10px', color:'#7fa8c8', fontFamily:'monospace' }}>{label}</div>
                 <div style={{ fontSize:'18px', fontWeight:700, color:sl.color, fontFamily:'"Rajdhani",monospace', lineHeight:1 }}>{(kp ?? 0).toFixed(1)}</div>
-                <div style={{ fontSize:'9px', color:sl.color, fontFamily:'monospace', marginTop:'2px' }}>{sl.label}</div>
+                <div style={{ fontSize:'9px', color:sl.color, fontFamily:'monospace', marginBlockStart:'2px' }}>{sl.label}</div>
                 {ci && <div style={{ fontSize:'9px', color:'#4a8aaa', fontFamily:'monospace' }}>[{ci.lower.toFixed(1)}–{ci.upper.toFixed(1)}]</div>}
               </div>
             );
@@ -221,7 +221,7 @@ function CMEImpactChart({ cmeEvents }: CMEChartProps) {
 
   return (
     <div style={PANEL_STYLE}>
-      <div style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em', marginBottom:'8px' }}>
+      <div style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em', marginBlockEnd:'8px' }}>
         CME IMPACT PROBABILITY  /  NASA DONKI
       </div>
       <div style={{ borderRadius:'8px', overflow:'hidden',
@@ -249,7 +249,7 @@ function CMEImpactChart({ cmeEvents }: CMEChartProps) {
         </BarChart>
         </ResponsiveContainer>
       </div>
-      <div style={{ display:'flex', gap:'6px', marginTop:'6px', flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:'6px', marginBlockStart:'6px', flexWrap:'wrap' }}>
         {data.slice(0, 5).map((e) => (
           <div key={e.id} style={{ fontSize:'10px', fontFamily:'monospace', color:'#60a0b8', background:'rgba(0,20,50,0.7)', borderRadius:'4px', padding:'3px 6px' }}>
             {e.id} → {e.arrival}
@@ -294,14 +294,14 @@ function StatusStrip({ bundle, loading, lastFetch, modelStatus, modelUsed }: Sta
         { label:'V-WIND',  value:`${spd.toFixed(0)} km/s`, alert: spd > 700 },
         { label:'DENSITY', value:`${den.toFixed(1)} p/cc`,  alert: den > 15 },
       ].map(({ label, value, alert }) => (
-        <div key={label} style={{ flex:1, minWidth:'72px', background:'rgba(0,20,50,0.5)', border:`1px solid ${alert ? 'rgba(239,68,68,0.4)' : 'rgba(0,200,255,0.12)'}`, borderRadius:'6px', padding:'4px 8px' }}>
+        <div key={label} style={{ flex:1, minInlineSize:'72px', background:'rgba(0,20,50,0.5)', border:`1px solid ${alert ? 'rgba(239,68,68,0.4)' : 'rgba(0,200,255,0.12)'}`, borderRadius:'6px', padding:'4px 8px' }}>
           <div style={{ fontSize:'9px', color:alert ? '#fca5a5' : '#7fa8c8', fontFamily:'monospace' }}>{label}</div>
           <div style={{ fontSize:'14px', color:alert ? '#ef4444' : '#cce8ff', fontFamily:'"Rajdhani",monospace', fontWeight:700 }}>{value}</div>
         </div>
       ))}
 
       {/* Model badge */}
-      <div style={{ flex:2, minWidth:'120px', background:'rgba(0,20,50,0.5)', border:'1px solid rgba(0,200,255,0.12)', borderRadius:'6px', padding:'4px 8px' }}>
+      <div style={{ flex:2, minInlineSize:'120px', background:'rgba(0,20,50,0.5)', border:'1px solid rgba(0,200,255,0.12)', borderRadius:'6px', padding:'4px 8px' }}>
         <div style={{ fontSize:'9px', color:'#7fa8c8', fontFamily:'monospace' }}>INFERENCE ENGINE</div>
         <div style={{ fontSize:'11px', color: modelStatus === 'loaded' ? '#22c55e' : '#eab308', fontFamily:'monospace', lineHeight:1.3 }}>{modelUsed}</div>
         <div style={{ fontSize:'9px', color:'#3a5a7a', fontFamily:'monospace' }}>
@@ -344,8 +344,8 @@ export function LSTMPredictiveGraph({
       gap:           '10px',
       padding:       '10px',
       fontFamily:    '"Rajdhani", "Share Tech Mono", monospace',
-      minWidth:      '340px',
-      maxWidth:      '520px',
+      minInlineSize:      '340px',
+      maxInlineSize:      '520px',
     }}>
       <StatusStrip
         bundle={bundle}
@@ -365,8 +365,8 @@ export function LSTMPredictiveGraph({
       {forecast?.alerts && forecast.alerts.length > 0 && (
         <div style={PANEL_STYLE}>
           {forecast.alerts.map((a, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'8px', marginBottom: i < forecast.alerts.length - 1 ? '6px' : 0 }}>
-              <div style={{ fontSize:'18px', lineHeight:1, marginTop:'0px' }}>
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'8px', marginBlockEnd: i < forecast.alerts.length - 1 ? '6px' : 0 }}>
+              <div style={{ fontSize:'18px', lineHeight:1, marginBlockStart:'0px' }}>
                 {a.severity === 'Critical' ? '🔴' : a.severity === 'Warning' ? '🟠' : '🟡'}
               </div>
               <div>

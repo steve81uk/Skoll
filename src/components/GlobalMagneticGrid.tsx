@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — GLOBAL MAGNETIC GRID
  * SVG equirectangular world map with INTERMAGNET observatory markers
  * showing real-time magnetic anomaly status.
@@ -227,12 +227,12 @@ export function GlobalMagneticGrid({ kpIndex, bzGsm, speed = 450 }: MagGridProps
       borderRadius: '10px',
       overflow:     'hidden',
       position:     'relative',
-      minWidth:     '320px',
-      maxWidth:     '520px',
+      minInlineSize:     '320px',
+      maxInlineSize:     '520px',
       fontFamily:   '"Rajdhani","Share Tech Mono",monospace',
     }}>
       {/* Header */}
-      <div style={{ padding:'8px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid rgba(0,200,255,0.12)' }}>
+      <div style={{ padding:'8px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBlockEnd:'1px solid rgba(0,200,255,0.12)' }}>
         <span style={{ fontSize:'13px', color:'#60c8ff', letterSpacing:'0.08em' }}>GLOBAL MAGNETIC FIELD  /  INTERMAGNET</span>
         <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
           <span style={{ fontSize:'11px', color: dst < -100 ? '#ef4444' : dst < -50 ? '#f97316' : '#22c55e', fontFamily:'monospace' }}>
@@ -374,7 +374,7 @@ export function GlobalMagneticGrid({ kpIndex, bzGsm, speed = 450 }: MagGridProps
       </div>
 
       {/* Kp bar */}
-      <div style={{ padding:'8px 12px', borderTop:'1px solid rgba(0,200,255,0.1)', display:'flex', alignItems:'center', gap:'8px' }}>
+      <div style={{ padding:'8px 12px', borderBlockStart:'1px solid rgba(0,200,255,0.1)', display:'flex', alignItems:'center', gap:'8px' }}>
         <span style={{ fontSize:'11px', color:'#7fa8c8', fontFamily:'monospace', whiteSpace:'nowrap' }}>Kp</span>
         <div style={{ flex:1, height:'8px', background:'rgba(0,20,50,0.8)', borderRadius:'4px', overflow:'hidden', position:'relative' }}>
           {/* Colour bands */}
@@ -389,11 +389,11 @@ export function GlobalMagneticGrid({ kpIndex, bzGsm, speed = 450 }: MagGridProps
           {/* Thumb */}
           <div style={{ position:'absolute', left:`${Math.min(98, kpIndex / 9 * 100)}%`, top:'-2px', width:'4px', height:'12px', background:'#fff', borderRadius:'2px', transform:'translateX(-50%)', boxShadow:'0 0 4px #fff8' }} />
         </div>
-        <span style={{ fontSize:'11px', fontFamily:'"Rajdhani",monospace', fontWeight:700, color: kpIndex >= 5 ? '#ef4444' : kpIndex >= 3 ? '#eab308' : '#22c55e', minWidth:'24px' }}>{kpIndex.toFixed(1)}</span>
+        <span style={{ fontSize:'11px', fontFamily:'"Rajdhani",monospace', fontWeight:700, color: kpIndex >= 5 ? '#ef4444' : kpIndex >= 3 ? '#eab308' : '#22c55e', minInlineSize:'24px' }}>{kpIndex.toFixed(1)}</span>
 
         {/* Storm alert */}
         {stations.filter((s) => s.level === 'storm').length > 0 && (
-          <span style={{ fontSize:'10px', color:'#ef4444', fontFamily:'monospace', marginLeft:'auto' }}>
+          <span style={{ fontSize:'10px', color:'#ef4444', fontFamily:'monospace', marginInlineStart:'auto' }}>
             {stations.filter((s) => s.level === 'storm').length} STATIONS STORM-LEVEL
           </span>
         )}

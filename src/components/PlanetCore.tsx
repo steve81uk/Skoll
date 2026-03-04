@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PlanetCore.tsx
  *
  * DOM panel showing a scientific cross-section of a planet's interior,
@@ -156,13 +156,13 @@ export default function PlanetCore({ planetName }: PlanetCoreProps) {
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${accent}10 0%,transparent 100%)`, borderBottom: `1px solid ${accent}22` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${accent}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${accent}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: accent, display: 'inline-block', boxShadow: `0 0 6px ${accent}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: accent, opacity: 0.85 }}>
           Interior Structure
         </span>
         {planetName && (
-          <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: 2 }}>— {planetName}</span>
+          <span style={{ fontSize: '9px', opacity: 0.6, marginInlineStart: 2 }}>— {planetName}</span>
         )}
       </div>
 
@@ -201,8 +201,8 @@ export default function PlanetCore({ planetName }: PlanetCoreProps) {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {data.layers.map((layer) => (
             <div key={layer.name} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-              <span style={{ width: 7, height: 7, borderRadius: '2px', background: layer.color, flexShrink: 0, marginTop: 1, opacity: 0.9 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '2px', background: layer.color, flexShrink: 0, marginBlockStart: 1, opacity: 0.9 }} />
+              <div style={{ flex: 1, minInlineSize: 0 }}>
                 <div style={{ fontSize: '8px', fontWeight: 'bold', color: '#c8dff0', letterSpacing: '0.03em', lineHeight: 1.3 }}>{layer.name}</div>
                 <div style={{ fontSize: '7px', opacity: 0.5, lineHeight: 1.3 }}>{layer.tempK}</div>
                 <div style={{ fontSize: '7px', opacity: 0.4, lineHeight: 1.3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{layer.state}</div>

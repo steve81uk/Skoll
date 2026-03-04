@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TerminalLogHUD — xterm.js WebSocket PM2 log viewer
  * Connects to ws://localhost:8080 and streams prediction + status messages.
  * FitAddon is used to prevent CSS text-spill.
@@ -234,7 +234,7 @@ export function TerminalLogHUD({ visible, wsUrl = 'ws://localhost:8080' }: Termi
           gap:             '8px',
           padding:         '5px 10px',
           background:      'rgba(56,189,248,0.06)',
-          borderBottom:    '1px solid rgba(56,189,248,0.12)',
+          borderBlockEnd:    '1px solid rgba(56,189,248,0.12)',
           flexShrink:      0,
         }}
       >
@@ -242,7 +242,7 @@ export function TerminalLogHUD({ visible, wsUrl = 'ws://localhost:8080' }: Termi
         <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#38bdf8', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
           ML Server · Live Log Stream
         </span>
-        <span style={{ marginLeft: 'auto', fontFamily: 'monospace', fontSize: '9px', color: 'rgba(176,200,212,0.4)' }}>
+        <span style={{ marginInlineStart: 'auto', fontFamily: 'monospace', fontSize: '9px', color: 'rgba(176,200,212,0.4)' }}>
           ws://localhost:8080
         </span>
       </div>

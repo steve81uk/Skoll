@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — ASTEROID BELT
  * InstancedMesh rendering of the Main Belt between Mars (1.52 AU) and Jupiter (5.20 AU).
  * ~2 200 asteroids laid out in a realistic toroidal distribution with Keplerian animation.
@@ -192,22 +192,22 @@ export const AsteroidBelt = () => {
               border: '1px solid rgba(34,211,238,0.28)',
               borderRadius: '10px',
               padding: '8px 12px',
-              minWidth: '160px',
+              minInlineSize: '160px',
               fontFamily: "'Courier New', monospace",
               fontSize: '10px',
               color: '#94d8f8',
             }}
           >
-            <div style={{ color: '#22d3ee', fontWeight: 700, letterSpacing: '0.12em', marginBottom: 4, textTransform: 'uppercase' }}>
+            <div style={{ color: '#22d3ee', fontWeight: 700, letterSpacing: '0.12em', marginBlockEnd: 4, textTransform: 'uppercase' }}>
               AST-{String(selectedIdx).padStart(4, '0')}
             </div>
-            <div style={{ color: 'rgba(148,216,248,0.7)', marginBottom: 2 }}>
+            <div style={{ color: 'rgba(148,216,248,0.7)', marginBlockEnd: 2 }}>
               Region: <span style={{ color: '#fff' }}>{selectedRegion}</span>
             </div>
-            <div style={{ color: 'rgba(148,216,248,0.7)', marginBottom: 2 }}>
+            <div style={{ color: 'rgba(148,216,248,0.7)', marginBlockEnd: 2 }}>
               Orbit: <span style={{ color: '#a78bfa' }}>{selectedAU} AU</span>
             </div>
-            <div style={{ color: 'rgba(148,216,248,0.7)', marginBottom: 2 }}>
+            <div style={{ color: 'rgba(148,216,248,0.7)', marginBlockEnd: 2 }}>
               Period: <span style={{ color: '#f97316' }}>{selectedOrbPeriod} yr</span>
             </div>
             <div style={{ color: 'rgba(148,216,248,0.7)' }}>
@@ -217,7 +217,7 @@ export const AsteroidBelt = () => {
               className="pointer-events-auto"
               onClick={() => setSelectedIdx(null)}
               style={{
-                marginTop: 6,
+                marginBlockStart: 6,
                 background: 'rgba(34,211,238,0.15)',
                 border: '1px solid rgba(34,211,238,0.3)',
                 borderRadius: 4,

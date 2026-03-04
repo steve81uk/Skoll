@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SKÖLL-TRACK — DSN LIVE LINK
  * Deep Space Network real-time contact display.
  *
@@ -228,7 +228,7 @@ function SignalBar({ dbm, color }: { dbm: number; color: string }) {
         <div style={{ width: `${(1 - pct) * 100}%`, height: '100%',
           background: `linear-gradient(90deg, ${color}, ${color}88)`, borderRadius: '2px' }} />
       </div>
-      <span style={{ fontSize: '9px', fontFamily: 'monospace', color: 'rgba(150,200,255,0.7)', minWidth: '54px' }}>
+      <span style={{ fontSize: '9px', fontFamily: 'monospace', color: 'rgba(150,200,255,0.7)', minInlineSize: '54px' }}>
         {dbm.toFixed(1)} dBm
       </span>
     </div>
@@ -279,22 +279,22 @@ export function DSNLiveLink() {
     borderRadius:  '10px',
     overflow:      'hidden',
     fontFamily:    '"Rajdhani","Share Tech Mono",monospace',
-    minWidth:      '320px',
-    maxWidth:      '520px',
+    minInlineSize:      '320px',
+    maxInlineSize:      '520px',
   };
 
   return (
     <div style={cardStyle}>
       {/* Header */}
-      <div style={{ padding:'10px 14px', borderBottom:'1px solid rgba(0,200,255,0.12)',
+      <div style={{ padding:'10px 14px', borderBlockEnd:'1px solid rgba(0,200,255,0.12)',
         display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
           <div style={{ fontSize:'13px', color:'#60c8ff', letterSpacing:'0.08em' }}>
             DSN LIVE LINK  /  DEEP SPACE NETWORK
           </div>
-          <div style={{ fontSize:'10px', color: source === 'live' ? '#22c55e' : '#eab308', fontFamily:'monospace', marginTop:'2px' }}>
+          <div style={{ fontSize:'10px', color: source === 'live' ? '#22c55e' : '#eab308', fontFamily:'monospace', marginBlockStart:'2px' }}>
             {source === 'live' ? '● LIVE NASA API' : '● SIMULATED'}
-            {timestamp && <span style={{ color:'rgba(100,150,200,0.6)', marginLeft:'8px' }}>
+            {timestamp && <span style={{ color:'rgba(100,150,200,0.6)', marginInlineStart:'8px' }}>
               {new Date(timestamp).toISOString().slice(11,19)} UTC
             </span>}
           </div>
@@ -308,16 +308,16 @@ export function DSNLiveLink() {
       </div>
 
       {/* Dish array status */}
-      <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(0,200,255,0.08)',
+      <div style={{ padding:'8px 14px', borderBlockEnd:'1px solid rgba(0,200,255,0.08)',
         display:'flex', gap:'10px', overflowX:'auto' }}>
         {(['Goldstone','Canberra','Madrid'] as const).map((site) => {
           const siteDishes = dishes.filter(d => d.site === site);
           const color = SITE_COLORS[site];
           const meta  = SITE_LAT_LON[site];
           return (
-            <div key={site} style={{ flex:1, minWidth:'90px', textAlign:'center', padding:'6px',
+            <div key={site} style={{ flex:1, minInlineSize:'90px', textAlign:'center', padding:'6px',
               background:'rgba(0,20,50,0.5)', borderRadius:'8px', border:`1px solid ${color}33` }}>
-              <div style={{ fontSize:'10px', color, fontFamily:'monospace', marginBottom:'2px' }}>
+              <div style={{ fontSize:'10px', color, fontFamily:'monospace', marginBlockEnd:'2px' }}>
                 {meta.flag} {site.toUpperCase()}
               </div>
               {siteDishes.length > 0 ? (
@@ -354,14 +354,14 @@ export function DSNLiveLink() {
         {contacts.map((c, i) => {
           const color = SITE_COLORS[c.site];
           return (
-            <div key={i} style={{ padding:'8px 14px', borderBottom:'1px solid rgba(0,200,255,0.06)',
+            <div key={i} style={{ padding:'8px 14px', borderBlockEnd:'1px solid rgba(0,200,255,0.06)',
               display:'flex', flexDirection:'column', gap:'4px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <div>
                   <span style={{ fontSize:'13px', color:'#cce8ff', fontFamily:'"Rajdhani",monospace', fontWeight:700 }}>
                     {c.spacecraft}
                   </span>
-                  <span style={{ marginLeft:'8px', fontSize:'10px', color,
+                  <span style={{ marginInlineStart:'8px', fontSize:'10px', color,
                     background:`${color}18`, borderRadius:'3px', padding:'1px 5px' }}>
                     {c.dish} / {c.site}
                   </span>
@@ -394,7 +394,7 @@ export function DSNLiveLink() {
       </div>
 
       {/* Footer */}
-      <div style={{ padding:'6px 14px', borderTop:'1px solid rgba(0,200,255,0.08)',
+      <div style={{ padding:'6px 14px', borderBlockStart:'1px solid rgba(0,200,255,0.08)',
         display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontSize:'9px', color:'rgba(100,150,200,0.5)', fontFamily:'monospace' }}>
           NASA DEEP SPACE NETWORK  · {dishes.length} DISHES ONLINE

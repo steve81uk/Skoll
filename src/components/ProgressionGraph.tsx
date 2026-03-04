@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
+import { CosmicTooltip } from './CosmicTooltip';
 
 /**
  * ProgressionGraph.tsx — SKÖLL-TRACK Dev Level & Feature Progression
@@ -103,7 +104,7 @@ export default function ProgressionGraph({ kpIndex = 0 }: ProgressionGraphProps)
   }, []);
 
   return (
-    <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#a0d8ff', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#a0d8ff', display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(6,10,22,0.75)', backdropFilter: 'blur(22px) saturate(1.6)', WebkitBackdropFilter: 'blur(22px) saturate(1.6)', border: '1px solid rgba(100,160,255,0.14)', borderRadius: '10px', padding: '10px', boxShadow: '0 0 28px rgba(68,136,255,0.06),0 4px 20px rgba(0,0,0,0.55)' }}>
 
       {/* XP / Level header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(100,180,255,0.18)' }}>
@@ -112,7 +113,7 @@ export default function ProgressionGraph({ kpIndex = 0 }: ProgressionGraphProps)
           <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#ffcc00', lineHeight: 1 }}>{level}</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBlockEnd: '3px' }}>
             <span style={{ color: '#ffdd44', fontSize: '11px', letterSpacing: '0.12em' }}>SKÖLL ARCHITECT</span>
             <span style={{ opacity: 0.6 }}>{totalXP.toLocaleString()} XP</span>
           </div>
@@ -125,7 +126,7 @@ export default function ProgressionGraph({ kpIndex = 0 }: ProgressionGraphProps)
               transition: 'width 1s ease',
             }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', fontSize: '8px', opacity: 0.55 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBlockStart: '2px', fontSize: '8px', opacity: 0.55 }}>
             <span>{xpInLevel} / {xpForNext} XP to LV{level + 1}</span>
             <span>{unlocked}/{total} features unlocked</span>
           </div>
@@ -134,7 +135,7 @@ export default function ProgressionGraph({ kpIndex = 0 }: ProgressionGraphProps)
 
       {/* Category breakdown */}
       <div>
-        <div style={{ fontSize: '8px', letterSpacing: '0.12em', opacity: 0.55, textTransform: 'uppercase', marginBottom: '5px' }}>Skill Categories</div>
+        <div style={{ fontSize: '8px', letterSpacing: '0.12em', opacity: 0.55, textTransform: 'uppercase', marginBlockEnd: '5px' }}>Skill Categories</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
           {categoryStats.sort((a, b) => b[1].xp - a[1].xp).map(([cat, stat]) => (
             <div key={cat} style={{
@@ -153,32 +154,39 @@ export default function ProgressionGraph({ kpIndex = 0 }: ProgressionGraphProps)
 
       {/* Tier skill tree */}
       <div>
-        <div style={{ fontSize: '8px', letterSpacing: '0.12em', opacity: 0.55, textTransform: 'uppercase', marginBottom: '5px' }}>Skill Tree</div>
+        <div style={{ fontSize: '8px', letterSpacing: '0.12em', opacity: 0.55, textTransform: 'uppercase', marginBlockEnd: '5px' }}>Skill Tree</div>
         {([1, 2, 3, 4, 5] as const).map((tier) => (
-          <div key={tier} style={{ marginBottom: '6px' }}>
-            <div style={{ fontSize: '8px', color: '#8899aa', marginBottom: '3px', letterSpacing: '0.1em' }}>
+          <div key={tier} style={{ marginBlockEnd: '6px' }}>
+            <div style={{ fontSize: '8px', color: '#8899aa', marginBlockEnd: '3px', letterSpacing: '0.1em' }}>
               ── TIER {tier}: {TIER_LABELS[tier]}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
               {(tierGroups[tier] ?? []).map((f) => (
-                <div
+                <CosmicTooltip
                   key={f.id}
-                  title={`${f.name} — ${f.xp} XP`}
-                  style={{
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontSize: '9px',
-                    background: f.unlocked
-                      ? `${CATEGORY_COLORS[f.category] ?? '#445566'}22`
-                      : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${f.unlocked ? CATEGORY_COLORS[f.category] ?? '#445566' : '#334455'}`,
-                    color: f.unlocked ? (CATEGORY_COLORS[f.category] ?? '#a0d8ff') : '#334455',
-                    whiteSpace: 'nowrap',
-                    cursor: 'default',
+                  content={{
+                    title: f.name,
+                    description: `${f.xp} XP · Tier ${f.tier}: ${TIER_LABELS[f.tier]} · Category: ${f.category}`,
+                    accentColor: CATEGORY_COLORS[f.category] ?? '#4488ff',
                   }}
                 >
-                  {f.unlocked ? '✦ ' : '○ '}{f.name}
-                </div>
+                  <div
+                    style={{
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '9px',
+                      background: f.unlocked
+                        ? `${CATEGORY_COLORS[f.category] ?? '#445566'}22`
+                        : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${f.unlocked ? CATEGORY_COLORS[f.category] ?? '#445566' : '#334455'}`,
+                      color: f.unlocked ? (CATEGORY_COLORS[f.category] ?? '#a0d8ff') : '#334455',
+                      whiteSpace: 'nowrap',
+                      cursor: 'default',
+                    }}
+                  >
+                    {f.unlocked ? '✦ ' : '○ '}{f.name}
+                  </div>
+                </CosmicTooltip>
               ))}
             </div>
           </div>

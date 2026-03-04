@@ -8,6 +8,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FC } from 'react';
 import { calculateExoTelemetry, SYSTEM_CONSTANTS } from '../ml/ExoPhysics';
+import { CosmicTooltip } from './CosmicTooltip';
+import type { TooltipContent } from '../context/TooltipContext';
+
+// ─── CosmicTooltip content for each readout cell ──────────────────────────────
+const RADAR_COSMIC: Record<string, TooltipContent> = {
+  KP:   { title: 'Magnetic Storm Index',  description: 'The Kp-index (0–9) measures disturbances in Earth\'s magnetic field. Values above 5 indicate storm conditions that can disrupt GPS, satellite links, and power grids.', accentColor: '#22d3ee' },
+  WIND: { title: 'Solar Wind Speed',      description: 'How fast charged particles from the Sun are streaming past Earth (km/s). Fast wind compresses our magnetic shield and fuels auroras.',               accentColor: '#44bbff' },
+  CME:  { title: 'CME Plasma Pressure',   description: 'A Coronal Mass Ejection is a giant cloud of solar plasma. High pressure squeezes Earth\'s magnetosphere closer to the planet — satellites in danger.',  accentColor: '#ff8844' },
+  AUR:  { title: 'Aurora Intensity',      description: 'Energetic particle precipitation driving current auroral displays. At high levels the Northern Lights can be seen as far south as the mid-latitudes.',     accentColor: '#cc44ff' },
+};
 
 // ─── Tooltip definitions ──────────────────────────────────────────────────────
 const RADAR_TOOLTIPS: Record<string, { title: string; desc: string }> = {
@@ -381,26 +391,27 @@ export const ForecastRadarSlate: FC<ForecastRadarProps> = ({
             { label: 'CME',  raw: `${(cmeDisplay * 100).toFixed(0)}%`,      norm: cmeDisplay,      tipKey: 'CME'  },
             { label: 'AUR',  raw: `${(auroraIntensity * 100).toFixed(0)}%`, norm: auroraIntensity, tipKey: 'AUR'  },
           ].map(({ label, raw, norm, tipKey }) => (
-            <div
-              key={label}
-              className="rounded border bg-black/30 px-1 py-1 cursor-default select-none"
-              style={{ borderColor: hoveredKey === tipKey ? `${threatColor(norm)}66` : `${threatColor(norm)}22` }}
-              onMouseEnter={() => setHoveredKey(tipKey)}
-              onMouseLeave={() => setHoveredKey(null)}
-            >
+            <CosmicTooltip key={label} content={RADAR_COSMIC[tipKey]}>
               <div
-                className="text-xs uppercase tracking-[0.14em] font-mono"
-                style={{ color: hoveredKey === tipKey ? 'rgba(148,216,248,0.95)' : 'rgba(148,216,248,0.65)' }}
+                className="rounded border bg-black/30 px-1 py-1 cursor-default select-none"
+                style={{ borderColor: hoveredKey === tipKey ? `${threatColor(norm)}66` : `${threatColor(norm)}22` }}
+                onMouseEnter={() => setHoveredKey(tipKey)}
+                onMouseLeave={() => setHoveredKey(null)}
               >
-                {label}
+                <div
+                  className="text-xs uppercase tracking-[0.14em] font-mono"
+                  style={{ color: hoveredKey === tipKey ? 'rgba(148,216,248,0.95)' : 'rgba(148,216,248,0.65)' }}
+                >
+                  {label}
+                </div>
+                <div
+                  className="text-xs font-bold font-mono tabular-nums mt-0.5"
+                  style={{ color: threatColor(norm) }}
+                >
+                  {raw}
+                </div>
               </div>
-              <div
-                className="text-xs font-bold font-mono tabular-nums mt-0.5"
-                style={{ color: threatColor(norm) }}
-              >
-                {raw}
-              </div>
-            </div>
+            </CosmicTooltip>
           ))}
         </div>
       </div>

@@ -81,7 +81,7 @@ export const HealthDashboard: React.FC = () => {
                       <div className="mt-2 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
                           <div
                               className={`h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000`}
-                              style={{ inlineSize: mod.restarts > 0 ? '70%' : '100%' }}
+                              style={{ width: mod.restarts > 0 ? '70%' : '100%' }}
                         ></div>
                     </div>
                 </div>

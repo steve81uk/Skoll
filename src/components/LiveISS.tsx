@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+﻿import { useRef, useEffect, useState, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -65,14 +65,14 @@ export function LiveISSHUD({ data, visible }: { data: ISSData | null; visible: b
         border: '1px solid rgba(100,255,180,0.22)',
         borderRadius: '8px',
         padding: '8px 14px',
-        minWidth: '180px',
+        minInlineSize: '180px',
         fontFamily: 'monospace',
         fontSize: '10px',
         color: '#80ffcc',
         letterSpacing: '0.08em',
       }}
     >
-      <div style={{ fontSize: '8px', color: 'rgba(128,255,200,0.6)', marginBottom: '4px', textTransform: 'uppercase' }}>
+      <div style={{ fontSize: '8px', color: 'rgba(128,255,200,0.6)', marginBlockEnd: '4px', textTransform: 'uppercase' }}>
         🛰 ISS LIVE TRACK
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 10px' }}>
