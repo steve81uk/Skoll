@@ -65,7 +65,6 @@ type FXQuality = 'LOW' | 'HIGH';
 type DockTone = 'telemetry' | 'forecast' | 'sim';
 type DockStatus = 'green' | 'amber' | 'red';
 type DockSide = 'left' | 'right';
-type ModalSnap = 'left' | 'center' | 'right';
 type PerfChipPosition = { x: number; y: number };
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
 
@@ -256,11 +255,8 @@ export default function App() {
   const [blackoutVisible, setBlackoutVisible] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [dockModalTileId, setDockModalTileId] = useState<string | null>(null);
+  const [dockModalSide, setDockModalSide] = useState<DockSide>('left');
   const [dockModalPinned, setDockModalPinned] = useState(false);
-  const [modalSnap, setModalSnap] = useState<ModalSnap>(() => {
-    const saved = window.localStorage.getItem('skoll.modalSnap');
-    return saved === 'left' || saved === 'center' || saved === 'right' ? saved : 'center';
-  });
   const [hoveredDock, setHoveredDock] = useState<{ label: string; status: DockStatus; x: number; y: number; side: DockSide } | null>(null);
   const [fps, setFps] = useState(60);
   const [lstmLatencyMs, setLstmLatencyMs] = useState<number | null>(null);
@@ -291,6 +287,7 @@ export default function App() {
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
   const [planetRefs, setPlanetRefs] = useState<Map<string, THREE.Group>>(new Map());
   const burstTimeoutRef = useRef<number | null>(null);
+  const dockPanelRef = useRef<HTMLDivElement | null>(null);
 
   /** Master Reset — clears every active simulation in one click. */
   const handleMasterReset = useCallback(() => {
@@ -489,10 +486,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    window.localStorage.setItem('skoll.modalSnap', modalSnap);
-  }, [modalSnap]);
-
-  useEffect(() => {
     window.localStorage.setItem('skoll.perfChipPosition', JSON.stringify(perfChipPosition));
   }, [perfChipPosition]);
 
@@ -520,6 +513,7 @@ export default function App() {
         const rightTile = rightDockTiles[number - 1];
         if (!rightTile) return;
         setSelectedTileId(rightTile.id);
+        setDockModalSide('right');
         setDockModalPinned(false);
         setDockModalTileId((prev) => (prev === rightTile.id ? null : rightTile.id));
         return;
@@ -528,6 +522,7 @@ export default function App() {
       const leftTile = leftDockTiles[number - 1];
       if (!leftTile) return;
       setSelectedTileId(leftTile.id);
+      setDockModalSide('left');
       setDockModalPinned(false);
       setDockModalTileId((prev) => (prev === leftTile.id ? null : leftTile.id));
     };
@@ -570,11 +565,37 @@ export default function App() {
     [goesFlux, lstmLatencyMs, lstmWorker, noaaDonki],
   );
 
-  const modalSnapClass = useMemo(() => {
-    if (modalSnap === 'center') return 'left-1/2 -translate-x-1/2';
-    if (modalSnap === 'left') return 'left-[calc(var(--dock-width)+1rem)]';
-    return 'right-[calc(var(--dock-width)+1rem)]';
-  }, [modalSnap]);
+  const dockSideClass = useMemo(
+    () => (dockModalSide === 'left' ? 'left-[calc(var(--dock-width)+1.75rem)]' : 'right-[calc(var(--dock-width)+1.75rem)]'),
+    [dockModalSide],
+  );
+
+  useEffect(() => {
+    if (!dockModalTileId || dockModalPinned) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+
+      if (dockPanelRef.current?.contains(target)) {
+        return;
+      }
+
+      const element = event.target as HTMLElement | null;
+      if (element?.closest('.skoll-dock-button')) {
+        return;
+      }
+
+      setDockModalTileId(null);
+    };
+
+    window.addEventListener('mousedown', handleOutsideClick);
+    return () => window.removeEventListener('mousedown', handleOutsideClick);
+  }, [dockModalPinned, dockModalTileId]);
 
   const renderSubmenuContent = (tileId: string) => {
     switch (tileId) {
@@ -1377,6 +1398,7 @@ export default function App() {
                       onMouseLeave={() => setHoveredDock(null)}
                       onClick={() => {
                         setSelectedTileId(item.id);
+                        setDockModalSide('left');
                         setDockModalPinned(false);
                         setDockModalTileId((prev) => (prev === item.id ? null : item.id));
                       }}
@@ -1406,6 +1428,7 @@ export default function App() {
                       onMouseLeave={() => setHoveredDock(null)}
                       onClick={() => {
                         setSelectedTileId(item.id);
+                        setDockModalSide('right');
                         setDockModalPinned(false);
                         setDockModalTileId((prev) => (prev === item.id ? null : item.id));
                       }}
@@ -1433,69 +1456,45 @@ export default function App() {
                 )}
 
                 {dockModalTileId && (
-                  <div className="fixed inset-0 z-50 pointer-events-auto" onMouseDown={() => {
-                    if (!dockModalPinned) {
-                      setDockModalTileId(null);
-                    }
-                  }}>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      className={`nasa-slate fixed top-20 z-50 w-[min(92vw,42rem)] max-w-2xl p-3 ${modalSnapClass}`}
-                    >
-                      <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
-                        <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                          {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setModalSnap('left')}
-                            className={`h-6 px-1.5 rounded border text-[8px] uppercase tracking-[0.14em] ${modalSnap === 'left' ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300'}`}
-                          >
-                            L
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setModalSnap('center')}
-                            className={`h-6 px-1.5 rounded border text-[8px] uppercase tracking-[0.14em] ${modalSnap === 'center' ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300'}`}
-                          >
-                            C
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setModalSnap('right')}
-                            className={`h-6 px-1.5 rounded border text-[8px] uppercase tracking-[0.14em] ${modalSnap === 'right' ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300'}`}
-                          >
-                            R
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDockModalPinned((prev) => !prev)}
-                            className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.14em] ${dockModalPinned ? 'border-amber-300 text-amber-100 bg-amber-500/10' : 'border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10'}`}
-                          >
-                            {dockModalPinned ? 'Pinned' : 'Pin'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDockModalPinned(false);
-                              setDockModalTileId(null);
-                            }}
-                            className="h-6 px-2 rounded border border-cyan-500/30 text-[8px] uppercase tracking-[0.14em] text-cyan-200 hover:bg-cyan-500/10"
-                          >
-                            Close
-                          </button>
-                        </div>
+                  <motion.div
+                    ref={dockPanelRef}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className={`nasa-slate fixed top-28 z-50 w-[min(90vw,38rem)] max-w-xl p-3 pointer-events-auto ${dockSideClass}`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
+                        {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
                       </div>
-                      <div className="max-h-[68vh] overflow-y-auto wolf-scroll pr-1">
-                        {renderSubmenuContent(dockModalTileId)}
+                      <div className="flex items-center gap-1">
+                        <span className="px-1 text-[8px] uppercase tracking-[0.14em] text-cyan-400/70">
+                          {dockModalSide === 'left' ? 'Left Rail' : 'Right Rail'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDockModalPinned((prev) => !prev)}
+                          className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.14em] ${dockModalPinned ? 'border-amber-300 text-amber-100 bg-amber-500/10' : 'border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10'}`}
+                        >
+                          {dockModalPinned ? 'Pinned' : 'Pin'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDockModalPinned(false);
+                            setDockModalTileId(null);
+                          }}
+                          className="h-6 px-2 rounded border border-cyan-500/30 text-[8px] uppercase tracking-[0.14em] text-cyan-200 hover:bg-cyan-500/10"
+                        >
+                          Close
+                        </button>
                       </div>
-                    </motion.div>
-                  </div>
+                    </div>
+                    <div className="max-h-[68vh] overflow-y-auto wolf-scroll pr-1">
+                      {renderSubmenuContent(dockModalTileId)}
+                    </div>
+                  </motion.div>
                 )}
               </>
             )}
@@ -1510,7 +1509,7 @@ export default function App() {
             )}
 
             <div className={[
-              'nasa-slate skoll-command-bar absolute left-1/2 -translate-x-1/2 bottom-3 z-[98] w-[min(98vw,1100px)] pointer-events-auto px-2.5 sm:px-3 py-2 rounded-xl',
+              'nasa-slate skoll-command-bar fixed left-1/2 -translate-x-1/2 top-3 z-[98] w-[min(98vw,1100px)] pointer-events-auto px-2.5 sm:px-3 py-2 rounded-xl',
               isReversal ? 'skoll-reversal-banner border-red-500/50' : 'border-cyan-500/30',
             ].join(' ')}>
               <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_auto] items-center gap-2 sm:gap-3">

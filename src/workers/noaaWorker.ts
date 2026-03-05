@@ -22,6 +22,10 @@
  *   CME Analysis:   https://api.nasa.gov/DONKI/CMEAnalysis?api_key=DEMO_KEY&speed=0&halfAngle=0&catalog=ALL&keyword=NONE
  */
 
+import { fetchJSONWithPolicy } from './fetchPolicy';
+import { estimateCmeArrivalIso } from '../ml/forecastMath';
+import { isKPForecastRows, isKPObservedRows, isMagRows, isWindRows } from './noaaSchemas';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface KPPoint {
   time:   string;   // ISO string
@@ -57,12 +61,13 @@ const SWPC  = 'https://services.swpc.noaa.gov';
 const DONKI = 'https://api.nasa.gov/DONKI';
 const DEMO  = 'DEMO_KEY';
 
-async function fetchJSON<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch { return null; }
+async function fetchJSON<T>(url: string, validator?: (value: unknown) => value is T): Promise<T | null> {
+  return fetchJSONWithPolicy<T>(url, {
+    retries: 2,
+    timeoutMs: 10_000,
+    backoffMs: 300,
+    validator,
+  });
 }
 
 // Synthesise impact probability from speed and half-angle (Gopalswamy method)
@@ -74,25 +79,15 @@ function cmeImpactProb(speed: number, halfAngle: number): number {
   return Math.round(speedFactor * 0.6 * angleFactor * 0.4 * 100 + speedFactor * 35);
 }
 
-// Estimate arrival from CME speed (simple kinematic model)
-function estimateArrival(startTime: string, speedKms: number): string | null {
-  if (!startTime || speedKms <= 0) return null;
-  const AU_KM   = 1.496e8;             // km
-  const secs    = AU_KM / speedKms;    // seconds to 1 AU
-  const start   = new Date(startTime);
-  if (isNaN(start.getTime())) return null;
-  return new Date(start.getTime() + secs * 1000).toISOString();
-}
-
 // ─── Individual fetchers ──────────────────────────────────────────────────────
 async function fetchKPSeries(): Promise<KPPoint[]> {
   // Current observed 1-min K-index
   type KPRow = { time_tag: string; kp_index: number };
-  const observed = await fetchJSON<KPRow[]>(`${SWPC}/json/planetary_k_index_1m.json`);
+  const observed = await fetchJSON<KPRow[]>(`${SWPC}/json/planetary_k_index_1m.json`, isKPObservedRows);
 
   // 3-day forecast grid: [[time, kp], …]
   type KPForecastRow = [string, number];
-  const forecast = await fetchJSON<KPForecastRow[]>(`${SWPC}/products/noaa-planetary-k-index.json`);
+  const forecast = await fetchJSON<KPForecastRow[]>(`${SWPC}/products/noaa-planetary-k-index.json`, isKPForecastRows);
 
   const points: KPPoint[] = [];
 
@@ -140,7 +135,7 @@ async function fetchCMEEvents(): Promise<CMEEvent[]> {
       type:              r.type ?? 'S',
       note:              r.note ?? '',
       impactProbability: cmeImpactProb(r.speed ?? 0, r.halfAngle ?? 0),
-      arrivalEstimate:   estimateArrival(r.startTime ?? '', r.speed ?? 0),
+      arrivalEstimate:   estimateCmeArrivalIso(r.startTime ?? '', r.speed ?? 0),
     }))
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
     .slice(0, 20);
@@ -152,9 +147,9 @@ async function fetchBundle(): Promise<NOAABundle> {
   type KPMinRow = { time_tag: string; kp_index: number };
 
   const [magRaw, windRaw, kpRaw, kpSeries, cmeEvents] = await Promise.all([
-    fetchJSON<MagRow[]>(`${SWPC}/products/solar-wind/mag-2-hour.json`),
-    fetchJSON<WindRow[]>(`${SWPC}/products/solar-wind/plasma-2-hour.json`),
-    fetchJSON<KPMinRow[]>(`${SWPC}/json/planetary_k_index_1m.json`),
+    fetchJSON<MagRow[]>(`${SWPC}/products/solar-wind/mag-2-hour.json`, isMagRows),
+    fetchJSON<WindRow[]>(`${SWPC}/products/solar-wind/plasma-2-hour.json`, isWindRows),
+    fetchJSON<KPMinRow[]>(`${SWPC}/json/planetary_k_index_1m.json`, isKPObservedRows),
     fetchKPSeries(),
     fetchCMEEvents(),
   ]);

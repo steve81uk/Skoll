@@ -15,6 +15,7 @@
  */
 
 import * as tf from '@tensorflow/tfjs';
+import { computeKesslerCascade } from '../ml/forecastMath';
 
 // ─── Normalization parameters (matches LSTMForecaster.ts) ─────────────────────
 const NORM = {
@@ -216,27 +217,6 @@ function buildExtendedWindows(
   return { fourteenDay, sixtyDay, oneYear };
 }
 
-function buildKesslerCascade(kpCurve: number[], features: import('../ml/types').FeatureVector): import('../ml/types').KesslerCascadeForecast {
-  const peakKp = Math.max(...kpCurve);
-  const meanKp = kpCurve.reduce((sum, value) => sum + value, 0) / Math.max(1, kpCurve.length);
-  const meanSpeed = features.solarWindSpeed.reduce((sum, value) => sum + value, 0) / Math.max(1, features.solarWindSpeed.length);
-
-  const driver = Math.max(0, (peakKp - 4) * 0.14) + Math.max(0, (meanKp - 3.5) * 0.1) + Math.max(0, (meanSpeed - 550) / 2200);
-  const next24hProbability = Math.min(0.95, 0.05 + driver * 0.9);
-  const next72hProbability = Math.min(0.98, 0.08 + driver * 1.1);
-  const next7dProbability = Math.min(0.99, 0.12 + driver * 1.25);
-
-  const riskBand: import('../ml/types').KesslerCascadeForecast['riskBand'] =
-    next7dProbability >= 0.6 ? 'CRITICAL' : next7dProbability >= 0.3 ? 'ELEVATED' : 'NOMINAL';
-
-  return {
-    next24hProbability: parseFloat(next24hProbability.toFixed(3)),
-    next72hProbability: parseFloat(next72hProbability.toFixed(3)),
-    next7dProbability: parseFloat(next7dProbability.toFixed(3)),
-    riskBand,
-  };
-}
-
 function buildForecast(kpCurve: number[], features: import('../ml/types').FeatureVector, modelUsed: string): import('../ml/types').NeuralForecast {
   const now      = Date.now();
   const lastKp   = features.kpIndex[features.kpIndex.length - 1] ?? 2.5;
@@ -266,7 +246,7 @@ function buildForecast(kpCurve: number[], features: import('../ml/types').Featur
   const variance = n > 1 ? features.kpIndex.slice(-8).reduce((s, v) => s + (v - lastKp) ** 2, 0) / 8 : 4;
 
   const extended = buildExtendedWindows(features, kpCurve);
-  const kesslerCascade = buildKesslerCascade(kpCurve, features);
+  const kesslerCascade = computeKesslerCascade(kpCurve, features.solarWindSpeed);
 
   return {
     generatedAt: new Date(now),
