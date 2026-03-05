@@ -246,7 +246,7 @@ export const SolarFlareParticles = ({
     });
 
     return { geometry: geo, material: mat };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [intensity, flareActive]);
 
   useFrame((state) => {

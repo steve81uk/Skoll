@@ -137,7 +137,7 @@ export class LSTMForecaster {
       this.model = await tf.loadLayersModel(modelPath);
       this.isModelLoaded = true;
       console.log('✅ Pre-trained LSTM model loaded successfully');
-    } catch (error) {
+    } catch {
       console.warn('⚠️ Could not load pre-trained weights, using untrained model');
       console.warn('   (This is expected during initial development)');
       this.initializeModel();

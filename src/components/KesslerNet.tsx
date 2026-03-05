@@ -19,6 +19,7 @@ import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
+import type { KesslerCascadeForecast } from '../ml/types';
 
 // ─── Orbital shell definitions ────────────────────────────────────────────────
 const DEBRIS_SHELLS = [
@@ -231,7 +232,15 @@ export function KesslerNet({ visible = true, kpIndex = 0, cmeActive = false }: K
 }
 
 // ─── HUD-only 2D version (for SlateTile panels) ───────────────────────────────
-export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: number; cmeActive?: boolean }) {
+export function KesslerNetStats({
+  kpIndex = 0,
+  cmeActive = false,
+  cascade,
+}: {
+  kpIndex?: number;
+  cmeActive?: boolean;
+  cascade?: KesslerCascadeForecast | null;
+}) {
   const totalDebris = DEBRIS_SHELLS.reduce((s, d) => s + d.count, 0);
   const collisionRisk = Math.min(100, (kpIndex / 9 * 40) + (cmeActive ? 35 : 0));
   const dangerLevel = collisionRisk >= 60 ? 'CRITICAL' : collisionRisk >= 35 ? 'ELEVATED' : 'NOMINAL';
@@ -293,7 +302,7 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
             { label:'LEO Density', val:`${(1400/2e6*100).toFixed(3)}%`, color:'#ef4444' },
             { label:'Rel. Velocity', val:'~7.5 km/s',   color:'#f97316' },
             { label:'Est. Growth', val:'+5%/yr',         color:'#eab308' },
-            { label:'Iridium Zone', val:'LEO-B: SATU',   color:'#60c8ff' },
+            { label:'7D Risk', val: cascade ? `${Math.round(cascade.next7dProbability * 100)}% ${cascade.riskBand}` : 'Awaiting', color:'#60c8ff' },
           ].map(({ label, val, color }) => (
             <div key={label} style={{ flex:1, minInlineSize:'80px', background:'rgba(0,10,30,0.6)',
               borderRadius:'4px', padding:'4px 6px' }}>
@@ -302,6 +311,11 @@ export function KesslerNetStats({ kpIndex = 0, cmeActive = false }: { kpIndex?: 
             </div>
           ))}
         </div>
+        {cascade && (
+          <div style={{ marginBlockStart:'6px', fontSize:'10px', color:'#a0d4ff', fontFamily:'monospace' }}>
+            24h {Math.round(cascade.next24hProbability * 100)}% · 72h {Math.round(cascade.next72hProbability * 100)}% · 7d {Math.round(cascade.next7dProbability * 100)}%
+          </div>
+        )}
         {cmeActive && (
           <div style={{ marginBlockStart:'6px', fontSize:'10px', color:'#ef4444', fontFamily:'monospace',
             padding:'4px 6px', background:'rgba(239,68,68,0.1)', borderRadius:'4px' }}>

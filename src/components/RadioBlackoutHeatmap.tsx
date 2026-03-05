@@ -155,7 +155,7 @@ function normaliseFlux(f: number): number {
 export default function RadioBlackoutHeatmap({ earthPos, fluxWm2, visible = true }: RadioBlackoutHeatmapProps) {
   const matRef = useRef<THREE.ShaderMaterial & { uFlux: number; uEarthWorldPos: THREE.Vector3; uTime: number }>(null);
 
-  const earthVec = useMemo(() => new THREE.Vector3(...earthPos), [earthPos[0], earthPos[1], earthPos[2]]);
+  const earthVec = useMemo(() => new THREE.Vector3(...earthPos), [earthPos]);
   const fluxNorm = normaliseFlux(fluxWm2);
 
   useFrame(({ clock }) => {

@@ -99,7 +99,7 @@ export function useLSTMWorker() {
     };
 
     return () => { worker.terminate(); workerRef.current = null; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // ─── Stable dispatch ────────────────────────────────────────────────────

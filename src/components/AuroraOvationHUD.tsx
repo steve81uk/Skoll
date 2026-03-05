@@ -159,7 +159,7 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: stormCol, display: 'inline-block', boxShadow: `0 0 6px ${stormCol}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>OVATION Prime</span>
-        <span style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', letterSpacing: '0.1em' }}>
+        <span className="live-clock" style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', letterSpacing: '0.1em', minInlineSize: '12ch' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC` : 'Pending'}
         </span>
       </div>

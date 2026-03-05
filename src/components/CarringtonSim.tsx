@@ -238,6 +238,14 @@ const SparkBurst = ({ radius, intensity }: { radius: number; intensity: number }
 export default function CarringtonSim({ earthPos, active }: CarringtonSimProps) {
   const groupRef  = useRef<THREE.Group>(null!);
   const intensity = useRef(0);
+  const EARTH_R = 2.2;
+  const fieldLines = useMemo(() =>
+    Array.from({ length: 24 }, (_, i) => ({
+      thetaDeg: (i / 24) * 360,
+      phiDeg:   30 + ((i * 13) % 60),
+      phase:    i * 0.42,
+    })),
+  []);
 
   useFrame((state) => {
     if (!active || !groupRef.current) return;
@@ -247,15 +255,6 @@ export default function CarringtonSim({ earthPos, active }: CarringtonSimProps) 
   });
 
   if (!active) return null;
-
-  const EARTH_R = 2.2;
-  const fieldLines = useMemo(() =>
-    Array.from({ length: 24 }, (_, i) => ({
-      thetaDeg: (i / 24) * 360,
-      phiDeg:   30 + ((i * 13) % 60),
-      phase:    i * 0.42,
-    })),
-  []);
 
   return (
     <group ref={groupRef}>

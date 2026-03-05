@@ -136,7 +136,7 @@ export const AsteroidBelt = () => {
       mesh.setMatrixAt(i, dummy.matrix);
     });
     mesh.instanceMatrix.needsUpdate = true;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [asteroidData, dummy]);
 
   useFrame((_state, delta) => {

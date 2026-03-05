@@ -22,7 +22,7 @@ import { calculateExoTelemetry } from '../ml/ExoPhysics';
 // ─── Env ──────────────────────────────────────────────────────────────────────
 const NASA_KEY: string | undefined = import.meta.env.VITE_NASA_API_KEY;
 const NASA_FIREBALL_PROXY_URL: string | undefined = import.meta.env.VITE_NASA_FIREBALL_PROXY_URL;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 const NOAA_KEY: string | undefined = import.meta.env.VITE_NOAA_API_KEY; // reserved for authenticated NOAA endpoints
 void NOAA_KEY;
 
@@ -239,7 +239,7 @@ export function useGlobalTelemetry(): GlobalTelemetry {
     fetchLive();
     const timer = setInterval(fetchLive, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return telemetry;

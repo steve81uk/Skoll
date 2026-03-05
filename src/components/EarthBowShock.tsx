@@ -109,7 +109,10 @@ export default function EarthBowShock({
   const geoRef = useRef<THREE.BufferGeometry>(buildBowShockGeometry(1.0));
 
   // Sun direction defaults to +X (sun at origin, earth at positive)
-  const sunDir = sunDirection ?? new THREE.Vector3(1, 0, 0);
+  const sunDir = useMemo(() => {
+    if (!sunDirection) return new THREE.Vector3(1, 0, 0);
+    return sunDirection.clone().normalize();
+  }, [sunDirection]);
 
   // Colour: cyan nominal → amber elevated KP → red CME
   const baseColour = useMemo(() => {
@@ -149,7 +152,7 @@ export default function EarthBowShock({
   // Orient so that mesh +X aligns with sunDir (nose points sunward)
   const quaternion = useMemo(() => {
     const q = new THREE.Quaternion();
-    q.setFromUnitVectors(new THREE.Vector3(1, 0, 0), sunDir.clone().normalize());
+    q.setFromUnitVectors(new THREE.Vector3(1, 0, 0), sunDir);
     return q;
   }, [sunDir]);
 

@@ -205,7 +205,7 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: flareClass.color, display: 'inline-block', boxShadow: `0 0 6px ${flareClass.color}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>GOES X-Ray Flux</span>
-        <span style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto' }}>
+        <span className="live-clock" style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', minInlineSize: '9ch' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Pending'}
         </span>
       </div>

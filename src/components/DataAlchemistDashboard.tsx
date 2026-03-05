@@ -12,7 +12,7 @@
  * All data sourced from useLSTMWorker + useNOAADONKI hooks or props.
  */
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import SolarWindScatter from './SolarWindScatter';
 import DRAPAbsorptionGraph from './DRAPAbsorptionGraph';
 import KpForecastMatrix from './KpForecastMatrix';
@@ -74,6 +74,10 @@ const FEATURE_WEIGHTS = [
   { name:'Newell Φ',  weight:0.04, color:C.newell},
 ];
 
+const MemoSolarWindScatter = memo(SolarWindScatter);
+const MemoDRAPAbsorptionGraph = memo(DRAPAbsorptionGraph);
+const MemoKpForecastMatrix = memo(KpForecastMatrix);
+
 // ─── Utility ──────────────────────────────────────────────────────────────────
 function fmtTime(iso: string) {
   try {
@@ -83,7 +87,7 @@ function fmtTime(iso: string) {
 }
 
 // ─── Panel 1: Feature Importance Bar ─────────────────────────────────────────
-function FeatureImportance({ modelUsed }: { modelUsed: string }) {
+const FeatureImportance = memo(function FeatureImportance({ modelUsed }: { modelUsed: string }) {
   return (
     <div style={PANEL}>
       <div style={{ fontSize:'12px', color:C.kp, letterSpacing:'0.08em', marginBlockEnd:'8px', fontFamily:'"Rajdhani",monospace' }}>
@@ -103,10 +107,10 @@ function FeatureImportance({ modelUsed }: { modelUsed: string }) {
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 // ─── Panel 2: KP History + Forecast Stack ────────────────────────────────────
-function KPForecastStack({ kpSeries, kpCurve24h }: { kpSeries: KPPoint[]; kpCurve24h: number[] }) {
+const KPForecastStack = memo(function KPForecastStack({ kpSeries, kpCurve24h }: { kpSeries: KPPoint[]; kpCurve24h: number[] }) {
   const data = useMemo(() => {
     const now = Date.now();
     const obs = kpSeries.filter(p => p.source === 'observed').slice(-36).map(p => ({
@@ -138,12 +142,12 @@ function KPForecastStack({ kpSeries, kpCurve24h }: { kpSeries: KPPoint[]; kpCurv
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 // ─── Panel 3: Solar Wind Parameter Stack ─────────────────────────────────────
 interface SwParam { t: string; speed: number; density: number; bt: number; bz: number }
 
-function SolarWindStack({ bundle }: { bundle: NOAABundle | null }) {
+const SolarWindStack = memo(function SolarWindStack({ bundle }: { bundle: NOAABundle | null }) {
   const data = useMemo<SwParam[]>(() => {
     const kpPts = bundle?.kpSeries.filter(p=>p.source==='observed').slice(-24) ?? [];
     // Synthesise correlated solar wind from KP history (real data would come from mag endpoint)
@@ -188,10 +192,10 @@ function SolarWindStack({ bundle }: { bundle: NOAABundle | null }) {
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 // ─── Panel 4: Radar — LSTM Prediction Confidence Decomposition ───────────────
-function ConfidenceRadar({ forecast }: { forecast: NeuralForecast | null }) {
+const ConfidenceRadar = memo(function ConfidenceRadar({ forecast }: { forecast: NeuralForecast | null }) {
   const data = useMemo(() => {
     if (!forecast) return [];
     const { confidence } = forecast;
@@ -226,10 +230,10 @@ function ConfidenceRadar({ forecast }: { forecast: NeuralForecast | null }) {
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 // ─── Panel 5: Prediction vs Storm Probability Scatter ─────────────────────────
-function StormProbScatter({ forecast }: { forecast: NeuralForecast | null }) {
+const StormProbScatter = memo(function StormProbScatter({ forecast }: { forecast: NeuralForecast | null }) {
   const points = useMemo(() => {
     if (!forecast) return [];
     return [
@@ -278,10 +282,10 @@ function StormProbScatter({ forecast }: { forecast: NeuralForecast | null }) {
       </div>
     </div>
   );
-}
+});
 
 // ─── Live Metrics Strip ───────────────────────────────────────────────────────
-function LiveMetrics({ bundle }: { bundle: NOAABundle | null }) {
+const LiveMetrics = memo(function LiveMetrics({ bundle }: { bundle: NOAABundle | null }) {
   const metrics = [
     { label:'Kp Now',   val:(bundle?.latestKp ?? 0).toFixed(1), color: bundle && bundle.latestKp >= 5 ? '#ef4444' : '#22c55e' },
     { label:'Bz GSM',   val:`${(bundle?.bzGsm ?? 0).toFixed(1)} nT`, color: bundle && bundle.bzGsm < -10 ? '#ef4444' : '#60c8ff' },
@@ -302,7 +306,7 @@ function LiveMetrics({ bundle }: { bundle: NOAABundle | null }) {
       ))}
     </div>
   );
-}
+});
 
 // ─── Tab button style ─────────────────────────────────────────────────────────
 function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -375,9 +379,9 @@ export function DataAlchemistDashboard({
       {/* Forecasting Data tab */}
       {activeTab === 'forecasting' && (
         <>
-          <SolarWindScatter bundle={bundle} />
-          <DRAPAbsorptionGraph fluxWm2={fluxWm2} />
-          <KpForecastMatrix kpCurve24h={kpCurve24h} kpNow={bundle?.latestKp ?? 2} />
+          <MemoSolarWindScatter bundle={bundle} />
+          <MemoDRAPAbsorptionGraph fluxWm2={fluxWm2} />
+          <MemoKpForecastMatrix kpCurve24h={kpCurve24h} kpNow={bundle?.latestKp ?? 2} />
         </>
       )}
     </div>

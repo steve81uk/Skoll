@@ -16,11 +16,9 @@ export const AtmosphericGlow = ({
   hasAtmosphere = true 
 }: AtmosphericGlowProps) => {
   const glowRef = useRef<THREE.Mesh>(null!);
-  
-  if (!hasAtmosphere) return null;
 
   useFrame((state) => {
-    if (!glowRef.current) return;
+    if (!hasAtmosphere || !glowRef.current) return;
     
     // Gentle pulsing
     const pulse = Math.sin(state.clock.elapsedTime * 0.8) * 0.08 + 1;
@@ -29,6 +27,8 @@ export const AtmosphericGlow = ({
     const mat = glowRef.current.material as THREE.ShaderMaterial;
     mat.uniforms.uTime.value = state.clock.elapsedTime;
   });
+
+  if (!hasAtmosphere) return null;
 
   return (
     <mesh ref={glowRef}>

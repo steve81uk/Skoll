@@ -14,6 +14,12 @@ interface TrackingTarget {
   name: string;
 }
 
+interface OrbitControlsState {
+  enabled: boolean;
+  enablePan: boolean;
+  target: Vector3;
+}
+
 export const usePlanetTracking = (
   trackedTarget: TrackingTarget | null,
   isEnabled: boolean
@@ -21,22 +27,24 @@ export const usePlanetTracking = (
   const { camera, controls } = useThree();
 
   useEffect(() => {
-    if (!controls) return;
+    const orbitControls = controls as unknown as OrbitControlsState | null;
+    if (!orbitControls) return;
 
     // Enable/disable orbit controls based on tracking state
     if (isEnabled && trackedTarget) {
-      (controls as any).enabled = true;
-      (controls as any).enablePan = false; // Lock panning while tracking
+      orbitControls.enabled = true;
+      orbitControls.enablePan = false; // Lock panning while tracking
     } else {
-      (controls as any).enablePan = true;
+      orbitControls.enablePan = true;
     }
   }, [isEnabled, trackedTarget, controls]);
 
   useFrame(() => {
-    if (!isEnabled || !trackedTarget || !controls) return;
+    const orbitControls = controls as unknown as OrbitControlsState | null;
+    if (!isEnabled || !trackedTarget || !orbitControls) return;
 
     const targetPos = trackedTarget.position;
-    const currentTarget = (controls as any).target;
+    const currentTarget = orbitControls.target;
 
     // Smoothly interpolate the orbit controls target to the planet's current position
     currentTarget.lerp(targetPos, 0.05); // 5% interpolation per frame = smooth following

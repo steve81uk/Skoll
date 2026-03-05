@@ -63,7 +63,7 @@ export default function KuiperBelt({ visible = true }: KuiperBeltProps) {
       meshRef.current.setMatrixAt(i, tempDummy.matrix);
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Differential orbital drift — very subtle

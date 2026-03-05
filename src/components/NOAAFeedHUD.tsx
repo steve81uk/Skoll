@@ -122,16 +122,16 @@ function MetricRow({
   label: string; live: number | string; forecast?: number | string; unit: string; color: string;
 }) {
   return (
-    <div className="flex items-center gap-2 text-[10px] font-mono">
+    <div className="flex w-full items-center gap-2 text-[10px] font-mono">
       <span className="w-20 shrink-0 uppercase tracking-[0.1em] text-cyan-400/70">{label}</span>
-      <span className="tabular-nums font-bold" style={{ color }}>
+      <span className="telemetry-value tabular-nums font-bold" style={{ color }}>
         {typeof live === 'number' ? live.toFixed(1) : live}
         <span className="text-cyan-400/50 font-normal ml-0.5">{unit}</span>
       </span>
       {forecast !== undefined && (
         <>
           <span className="text-cyan-500/40 mx-0.5">→</span>
-          <span className="tabular-nums text-cyan-300/80">
+          <span className="telemetry-value tabular-nums text-cyan-300/80">
             {typeof forecast === 'number' ? forecast.toFixed(1) : forecast}
             <span className="text-cyan-400/40 font-normal ml-0.5">{unit}</span>
           </span>
@@ -216,7 +216,7 @@ export const NOAAFeedHUD: React.FC<NOAAFeedHUDProps> = ({
             <span className="text-[9px] text-amber-400/80 uppercase tracking-wider font-mono">FALLBACK</span>
           )}
           {lastFetch && (
-            <span className="text-[8px] text-cyan-500/60 font-mono">
+            <span className="live-clock text-[8px] text-cyan-500/60 font-mono">
               {lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </span>
           )}

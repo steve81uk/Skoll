@@ -91,7 +91,7 @@ const Pill: FC<{ label: string; value: string; color?: string; pulse?: boolean }
   <div className="border border-cyan-500/20 rounded px-2 py-1.5">
     <div className="text-cyan-500/80">{label}</div>
     <div
-      className={`font-semibold tabular-nums${pulse ? ' animate-pulse' : ''}`}
+      className={`font-semibold tabular-nums telemetry-value${pulse ? ' animate-pulse' : ''}`}
       style={{ color }}
     >
       {value}
@@ -218,13 +218,13 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/15 to-transparent" />
 
       {/* Left: MET + KP */}
-      <div className="flex items-center gap-3 tabular-nums whitespace-nowrap relative z-10">
+      <div className="flex items-center gap-3 tabular-nums whitespace-nowrap relative z-10 w-[34%] min-w-0">
         <span className="text-cyan-500/80">MET</span>
-        <span className="text-cyan-100 font-semibold">{formatMET(data.metSeconds ?? 0)}</span>
+        <span className="text-cyan-100 font-semibold live-clock">{formatMET(data.metSeconds ?? 0)}</span>
         <span className="text-cyan-400/30">│</span>
         <span className="text-cyan-500/80">KP</span>
         <span
-          className={isKpAlert ? 'font-bold drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]' : 'font-semibold'}
+          className={`${isKpAlert ? 'font-bold drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]' : 'font-semibold'} telemetry-value`}
           style={{ color: kpColor(kp) }}
         >
           {kp.toFixed(1)}
@@ -232,13 +232,13 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
       </div>
 
       {/* Centre: contextual */}
-      <div className="flex items-center gap-2 tabular-nums whitespace-nowrap relative z-10">
+      <div className="flex items-center justify-center gap-2 tabular-nums whitespace-nowrap relative z-10 w-[32%] min-w-0">
         <span className="text-cyan-500/80">{centreLabel}</span>
-        <span className="font-semibold" style={{ color: centreColor }}>{centreValue}</span>
+        <span className="font-semibold telemetry-value" style={{ color: centreColor }}>{centreValue}</span>
       </div>
 
       {/* Right: location + aurora + solar wind */}
-      <div className="flex items-center gap-2 whitespace-nowrap relative z-10">
+      <div className="flex items-center justify-end gap-2 whitespace-nowrap relative z-10 w-[34%] min-w-0">
         <span className="text-cyan-500/60">{loc.name.split(',')[0].toUpperCase()}</span>
         <span
           className="rounded px-1 py-px text-[7px]"
@@ -255,7 +255,7 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
           <>
             <span className="text-cyan-400/30">│</span>
             <span className="text-cyan-500/80">SW</span>
-            <span className="text-orange-300 font-semibold">{bundle.solarWindSpeed.toFixed(0)} km/s</span>
+            <span className="text-orange-300 font-semibold telemetry-value">{bundle.solarWindSpeed.toFixed(0)} km/s</span>
           </>
         )}
       </div>

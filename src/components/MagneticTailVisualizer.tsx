@@ -14,7 +14,7 @@ export const MagneticTailVisualizer = ({
   standoffDistance,
 }: MagneticTailVisualizerProps) => {
   const groupRef = useRef<THREE.Group>(null!);
-  const streamersRef = useRef<Array<THREE.Points<any> | null>>([]);
+  const streamersRef = useRef<Array<THREE.Object3D | null>>([]);
   const coreRef = useRef<THREE.Mesh>(null!);
 
   // Create particle streamers - wispy plasma trails [cite: 2025-11-03]

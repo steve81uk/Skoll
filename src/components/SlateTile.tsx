@@ -39,7 +39,7 @@ export const SlateTile: FC<SlateTileProps> = ({
     const selectedRing = isSelected 
       ? 'ring-2 ring-cyan-400/50 backdrop-saturate-200' 
       : 'backdrop-saturate-150';
-    const base = `nasa-slate border ${accentClasses[accent]} font-mono pointer-events-auto ${selectedRing} ${glowEffect}`;
+    const base = `nasa-slate skoll-static-slate border ${accentClasses[accent]} font-mono pointer-events-auto w-full h-[268px] min-h-[268px] max-h-[268px] overflow-hidden ${selectedRing} ${glowEffect}`;
     if (isMaximized) {
       // [cite: 2025-12-11] Flex constraint: respect pillar boundaries (340px left + 280px right + 32px margins = 652px total)
       return `${base} fixed inset-x-[360px] inset-y-[72px] z-[120] overflow-auto wolf-scroll`;
@@ -61,7 +61,7 @@ export const SlateTile: FC<SlateTileProps> = ({
         )}
       </header>
 
-      <div className={isMaximized ? '' : 'max-h-[220px] overflow-y-auto wolf-scroll pr-1'}>{children}</div>
+      <div className={isMaximized ? '' : 'h-[220px] min-h-[220px] max-h-[220px] overflow-y-auto wolf-scroll pr-1'}>{children}</div>
     </section>
   );
 };

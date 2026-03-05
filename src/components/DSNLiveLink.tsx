@@ -294,7 +294,7 @@ export function DSNLiveLink() {
           </div>
           <div style={{ fontSize:'10px', color: source === 'live' ? '#22c55e' : '#eab308', fontFamily:'monospace', marginBlockStart:'2px' }}>
             {source === 'live' ? '● LIVE NASA API' : '● SIMULATED'}
-            {timestamp && <span style={{ color:'rgba(100,150,200,0.6)', marginInlineStart:'8px' }}>
+            {timestamp && <span className="live-clock" style={{ color:'rgba(100,150,200,0.6)', marginInlineStart:'8px', minInlineSize: '9ch' }}>
               {new Date(timestamp).toISOString().slice(11,19)} UTC
             </span>}
           </div>

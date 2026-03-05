@@ -298,8 +298,8 @@ const EarthAtmosphericHalo = ({ radius }: { radius: number }) => {
 
 const MoonBody = ({
   name,
-  currentIntensity: _moonIntensity, // reserved for future moon aurora features
-  cmeOverdrive:     _moonCme,       // reserved
+  currentIntensity,
+  cmeOverdrive,
   onFocus,
   onFocusComplete,
   moonIndex,
@@ -315,6 +315,9 @@ const MoonBody = ({
   datePhase: number;
   registerRef?: (name: string, ref: THREE.Group) => void;
 }) => {
+  void currentIntensity;
+  void cmeOverdrive;
+
   const moonMeshRef = useRef<THREE.Mesh>(null!);
   const moonGroupRef = useRef<THREE.Group>(null!);
   const { focusOnPlanet } = useCameraFocus();

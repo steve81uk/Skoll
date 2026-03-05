@@ -2,6 +2,22 @@
 
 ## ✅ Critical Fixes Applied
 
+### **0. Cockpit Runtime Hardening (March 2026)** 🧭
+
+- Keyboard HUD bindings stabilized with cleanup-safe listeners:
+   - `1`–`6` left dock toggles
+   - `Shift + 1`–`6` right dock toggles
+   - `Esc` closes overlays
+- Dock icon status dots now indicate feed/model state at a glance (green/amber/red)
+- Performance telemetry moved to a draggable persistent chip (FPS / LSTM latency / NOAA fetch age)
+- Dock-first interaction removed stacked panel clutter and reduced overlay jitter
+
+### **0.1 Data Model Abstraction Layer** 🧩
+
+- Unified hazard model introduced (`src/services/hazardModel.ts`)
+- UI is now decoupled from raw NOAA payload shape
+- This allows future provider swap (JSON APIs ↔ local WebGPU LLM) without changing HUD rendering components
+
 ### **1. Realistic Orbital Scaling** 🌍
 
 **Problem**: Planets were too close to Sun (would burn up!)

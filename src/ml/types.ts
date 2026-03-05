@@ -68,6 +68,14 @@ export interface NeuralForecast {
     dataQuality: number;      // 0-1 (how fresh/complete input data is)
   };
   alerts: ForecastAlert[];
+  kesslerCascade?: KesslerCascadeForecast;
+}
+
+export interface KesslerCascadeForecast {
+  next24hProbability: number;
+  next72hProbability: number;
+  next7dProbability: number;
+  riskBand: 'NOMINAL' | 'ELEVATED' | 'CRITICAL';
 }
 
 /**

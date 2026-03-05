@@ -2,6 +2,27 @@
 
 ## Major Visual Upgrades Implemented
 
+### 0. **Operational HUD Intelligence Layer** 🧠
+
+**Files**:
+
+- `src/components/OracleModule.tsx`
+- `src/hooks/useNeuralOracle.ts`
+- `src/workers/oracleWorker.ts`
+- `src/services/hazardModel.ts`
+
+**Added**:
+
+- Neural Oracle chat dock for plain-English hazard interpretation
+- Transformers.js WebGPU attempt with deterministic fallback path
+- Unified hazard telemetry contract for provider-agnostic UI
+- Kessler cascade probabilities integrated into HUD narratives
+
+**Operational Impact**:
+
+- Faster operator comprehension of raw telemetry
+- Clear migration path to local SLM pipelines without UI refactor
+
 ### 1. **Magnetotail Plasma Streamers** ✨
 
 **File**: `src/components/MagneticTailVisualizer.tsx`

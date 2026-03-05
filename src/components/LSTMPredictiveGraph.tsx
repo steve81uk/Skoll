@@ -283,7 +283,7 @@ function StatusStrip({ bundle, loading, lastFetch, modelStatus, modelUsed }: Sta
       {/* Kp badge */}
       <div style={{ background:`${sl.color}22`, border:`1px solid ${sl.color}66`, borderRadius:'6px', padding:'4px 10px', textAlign:'center' }}>
         <div style={{ fontSize:'9px', color:sl.color, fontFamily:'monospace' }}>Kp NOW</div>
-        <div style={{ fontSize:'22px', fontWeight:900, color:sl.color, fontFamily:'"Rajdhani",monospace', lineHeight:1 }}>{kp.toFixed(1)}</div>
+        <div className="telemetry-value" style={{ fontSize:'22px', fontWeight:900, color:sl.color, fontFamily:'"Rajdhani",monospace', lineHeight:1 }}>{kp.toFixed(1)}</div>
         <div style={{ fontSize:'9px', color:sl.color, fontFamily:'monospace' }}>{sl.label}</div>
       </div>
 
@@ -296,7 +296,7 @@ function StatusStrip({ bundle, loading, lastFetch, modelStatus, modelUsed }: Sta
       ].map(({ label, value, alert }) => (
         <div key={label} style={{ flex:1, minInlineSize:'72px', background:'rgba(0,20,50,0.5)', border:`1px solid ${alert ? 'rgba(239,68,68,0.4)' : 'rgba(0,200,255,0.12)'}`, borderRadius:'6px', padding:'4px 8px' }}>
           <div style={{ fontSize:'9px', color:alert ? '#fca5a5' : '#7fa8c8', fontFamily:'monospace' }}>{label}</div>
-          <div style={{ fontSize:'14px', color:alert ? '#ef4444' : '#cce8ff', fontFamily:'"Rajdhani",monospace', fontWeight:700 }}>{value}</div>
+          <div className="telemetry-value" style={{ fontSize:'14px', color:alert ? '#ef4444' : '#cce8ff', fontFamily:'"Rajdhani",monospace', fontWeight:700 }}>{value}</div>
         </div>
       ))}
 
@@ -304,7 +304,7 @@ function StatusStrip({ bundle, loading, lastFetch, modelStatus, modelUsed }: Sta
       <div style={{ flex:2, minInlineSize:'120px', background:'rgba(0,20,50,0.5)', border:'1px solid rgba(0,200,255,0.12)', borderRadius:'6px', padding:'4px 8px' }}>
         <div style={{ fontSize:'9px', color:'#7fa8c8', fontFamily:'monospace' }}>INFERENCE ENGINE</div>
         <div style={{ fontSize:'11px', color: modelStatus === 'loaded' ? '#22c55e' : '#eab308', fontFamily:'monospace', lineHeight:1.3 }}>{modelUsed}</div>
-        <div style={{ fontSize:'9px', color:'#3a5a7a', fontFamily:'monospace' }}>
+        <div className="live-clock" style={{ fontSize:'9px', color:'#3a5a7a', fontFamily:'monospace', minInlineSize: '12ch' }}>
           {loading ? 'FETCHING…' : lastFetch ? `UPD ${lastFetch.toUTCString().slice(17,22)} UTC` : '—'}
         </div>
       </div>

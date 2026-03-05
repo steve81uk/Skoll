@@ -28,7 +28,13 @@ void main() {
   gl_FragColor = vec4(skyColor + shimmer, 1.0);
 }`;
 
-export const SurfaceAtmosphere = ({ color, type, density }: any) => {
+interface SurfaceAtmosphereProps {
+  color: string;
+  type: 'CO2' | 'N2' | 'O2' | string;
+  density: number;
+}
+
+export const SurfaceAtmosphere = ({ color, type, density }: SurfaceAtmosphereProps) => {
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },

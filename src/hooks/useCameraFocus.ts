@@ -9,6 +9,11 @@ const MAX_FOCUS_RADIUS = 80;
 // Maximum camera offset so the view is never zoomed completely out.
 const MAX_CAMERA_OFFSET = 28;
 
+interface OrbitControlsState {
+  enabled: boolean;
+  target: Vector3;
+}
+
 export const useCameraFocus = () => {
   const { camera, controls } = useThree();
 
@@ -17,7 +22,8 @@ export const useCameraFocus = () => {
     radiusScale: number,
     onFocusComplete?: () => void,
   ) => {
-    if (!controls) return;
+    const orbitControls = controls as unknown as OrbitControlsState | null;
+    if (!orbitControls) return;
 
     // Kill any in-progress camera tween to prevent jump / stutter glitch.
     gsap.killTweensOf(camera.position);
@@ -31,12 +37,12 @@ export const useCameraFocus = () => {
     }
 
     // 1. Immobilise Controls for the transition
-    (controls as any).enabled = false;
+    orbitControls.enabled = false;
 
     const tl = gsap.timeline({
       onComplete: () => {
-        (controls as any).enabled = true;
-        (controls as any).target.copy(safeTarget); // Anchor orbit around clamped target
+        orbitControls.enabled = true;
+        orbitControls.target.copy(safeTarget); // Anchor orbit around clamped target
         onFocusComplete?.();
       }
     });

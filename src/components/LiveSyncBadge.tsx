@@ -47,11 +47,10 @@ const STATE_CONFIG: Record<SyncState, { color: string; label: string; pulse: boo
 
 export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epochYear }: LiveSyncBadgeProps) {
   const [now, setNow] = useState(() => new Date());
-  const [tick, setTick] = useState(0);
 
   // Update every second
   useEffect(() => {
-    const id = setInterval(() => { setNow(new Date()); setTick(t => t + 1); }, 1000);
+    const id = setInterval(() => { setNow(new Date()); }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -70,15 +69,17 @@ export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epo
   const iso = displayDate.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 
   // Pulse animation (CSS inline keyframes via state)
-  const pulseOpacity = cfg.pulse ? (0.6 + Math.sin(tick * 0.8) * 0.4) : 1;
+  const pulseOpacity = cfg.pulse ? (0.6 + Math.sin(now.getTime() / 1000 * 0.8) * 0.4) : 1;
 
   return (
     <div
       title={`${source} · Last updated: ${lastFetch ? lastFetch.toISOString() : 'never'}`}
       style={{
-        display:        'inline-flex',
+        display:        'flex',
         alignItems:     'center',
         gap:            '7px',
+        width:          '320px',
+        minWidth:       '320px',
         background:     'rgba(3,10,25,0.88)',
         border:         `1px solid ${cfg.color}44`,
         borderRadius:   '8px',
@@ -102,7 +103,7 @@ export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epo
       }} />
 
       {/* Content */}
-      <div style={{ display:'flex', flexDirection:'column', gap:'1px' }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:'1px', minWidth: 0, width: '100%' }}>
         {/* Top row: state + source */}
         <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
           <span style={{
@@ -124,7 +125,7 @@ export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epo
         </div>
 
         {/* ISO 8601 timestamp */}
-        <span style={{
+        <span className="live-clock-iso" style={{
           fontSize:   '11px',
           color:      'rgba(180,220,255,0.9)',
           fontFamily: '"Share Tech Mono",monospace',
@@ -136,12 +137,12 @@ export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epo
 
         {/* Age line */}
         {!isLiveMode && epochYear && (
-          <span style={{ fontSize:'9px', color:'rgba(100,150,200,0.55)', fontFamily:'monospace' }}>
+          <span className="telemetry-value" style={{ fontSize:'9px', color:'rgba(100,150,200,0.55)', fontFamily:'monospace', minInlineSize: '16ch', textAlign: 'start' }}>
             HISTORICAL · EPOCH {epochYear < 0 ? `${Math.abs(epochYear).toLocaleString()} BCE` : epochYear}
           </span>
         )}
         {isLiveMode && (
-          <span style={{ fontSize:'9px', color:'rgba(100,150,200,0.55)', fontFamily:'monospace' }}>
+          <span className="live-clock" style={{ fontSize:'9px', color:'rgba(100,150,200,0.55)', fontFamily:'monospace', minInlineSize: '10ch' }}>
             {age !== null ? fmtAge(age) : 'fetching…'}
           </span>
         )}
@@ -153,10 +154,9 @@ export function LiveSyncBadge({ lastFetch, source = 'NOAA SWPC', isLiveMode, epo
 // ─── Compact inline variant (single line) ─────────────────────────────────────
 export function LiveSyncBadgeCompact({ lastFetch, isLiveMode }: Pick<LiveSyncBadgeProps, 'lastFetch' | 'isLiveMode'>) {
   const [now, setNow] = useState(() => new Date());
-  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => { setNow(new Date()); setTick(t => t + 1); }, 1000);
+    const id = setInterval(() => { setNow(new Date()); }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -168,10 +168,10 @@ export function LiveSyncBadgeCompact({ lastFetch, isLiveMode }: Pick<LiveSyncBad
 
   const cfg = STATE_CONFIG[syncState];
   const iso = now.toISOString().replace('T', ' ').slice(0, 19) + 'Z';
-  const pulseOpacity = cfg.pulse ? (0.5 + Math.sin(tick * 0.8) * 0.5) : 1;
+  const pulseOpacity = cfg.pulse ? (0.5 + Math.sin(now.getTime() / 1000 * 0.8) * 0.5) : 1;
 
   return (
-    <div style={{ display:'inline-flex', alignItems:'center', gap:'5px' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:'5px', width: '240px', minWidth: '240px' }}>
       <div style={{
         width: '6px', height: '6px', borderRadius: '50%',
         background: cfg.color, opacity: pulseOpacity,
@@ -180,7 +180,7 @@ export function LiveSyncBadgeCompact({ lastFetch, isLiveMode }: Pick<LiveSyncBad
       <span style={{ fontSize:'9px', color:cfg.color, fontFamily:'monospace', letterSpacing:'0.06em' }}>
         {cfg.label}
       </span>
-      <span style={{ fontSize:'9px', color:'rgba(150,200,255,0.65)', fontFamily:'monospace' }}>
+      <span className="live-clock-iso" style={{ fontSize:'9px', color:'rgba(150,200,255,0.65)', fontFamily:'monospace', minInlineSize: '20ch' }}>
         {iso}
       </span>
     </div>

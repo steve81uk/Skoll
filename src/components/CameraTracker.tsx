@@ -13,6 +13,11 @@ interface CameraTrackerProps {
   isEnabled: boolean;
 }
 
+interface OrbitControlsState {
+  enablePan: boolean;
+  target: THREE.Vector3;
+}
+
 export const CameraTracker: React.FC<CameraTrackerProps> = ({
   targetName,
   planetRefs,
@@ -23,28 +28,30 @@ export const CameraTracker: React.FC<CameraTrackerProps> = ({
   const smoothCameraPos = useRef(new THREE.Vector3());
 
   useEffect(() => {
-    if (!controls) return;
+    const orbitControls = controls as unknown as OrbitControlsState | null;
+    if (!orbitControls) return;
 
     if (isEnabled && targetName) {
-      (controls as any).enablePan = false;
+      orbitControls.enablePan = false;
       const targetRef = planetRefs.get(targetName);
       if (targetRef) {
         smoothTargetPos.current.copy(targetRef.position);
         smoothCameraPos.current.copy(camera.position);
       }
     } else {
-      (controls as any).enablePan = true;
+      orbitControls.enablePan = true;
     }
   }, [isEnabled, targetName, controls, camera, planetRefs]);
 
   useFrame(() => {
-    if (!isEnabled || !targetName || !controls) return;
+    const orbitControls = controls as unknown as OrbitControlsState | null;
+    if (!isEnabled || !targetName || !orbitControls) return;
 
     const targetRef = planetRefs.get(targetName);
     if (!targetRef) return;
 
     const targetPos = targetRef.position;
-    const currentControlsTarget = (controls as any).target;
+    const currentControlsTarget = orbitControls.target;
 
     // Smooth interpolation of controls target (where we're orbiting around)
     smoothTargetPos.current.lerp(targetPos, 0.08);
