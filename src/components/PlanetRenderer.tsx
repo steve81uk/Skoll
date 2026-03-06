@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import planetData from '../ml/planet_facts.json';
 import { useCameraFocus } from '../hooks/useCameraFocus';
@@ -279,7 +279,7 @@ const EarthAtmosphericHalo = ({ radius }: { radius: number }) => {
 
   return (
     <mesh>
-      <sphereGeometry args={[radius * 1.065, 64, 64]} />
+      <sphereGeometry args={[radius * 1.065, 24, 16]} />
       <shaderMaterial
         ref={haloRef}
         key="earth-atm-halo"
@@ -319,7 +319,9 @@ const MoonBody = ({
   void cmeOverdrive;
 
   const moonMeshRef = useRef<THREE.Mesh>(null!);
+  const moonSpriteRef = useRef<THREE.Sprite>(null!);
   const moonGroupRef = useRef<THREE.Group>(null!);
+  const { camera } = useThree();
   const { focusOnPlanet } = useCameraFocus();
   const moonConstant = SYSTEM_CONSTANTS[name];
   const moonRadius = 0.25 + moonIndex * 0.08;
@@ -327,6 +329,14 @@ const MoonBody = ({
   const moonColor = new THREE.Color(moonConstant.colour);
   const texturePath = TEXTURE_MAP[name.toLowerCase()] || '/textures/2k_moon.jpg';
   const moonTexture = useLoader(THREE.TextureLoader, texturePath);
+
+  useEffect(() => {
+    moonTexture.generateMipmaps = false;
+    moonTexture.minFilter = THREE.LinearFilter;
+    moonTexture.magFilter = THREE.LinearFilter;
+    moonTexture.anisotropy = 1;
+    moonTexture.needsUpdate = true;
+  }, [moonTexture]);
 
   // Register this moon with the tracking system
   useEffect(() => {
@@ -343,6 +353,11 @@ const MoonBody = ({
       0,
       Math.sin(t * (0.7 + moonIndex * 0.16)) * moonOrbitRadius,
     );
+
+    const distance = camera.position.distanceTo(moonGroupRef.current.position);
+    const far = distance > 240;
+    if (moonMeshRef.current) moonMeshRef.current.visible = !far;
+    if (moonSpriteRef.current) moonSpriteRef.current.visible = far;
   });
 
   return (
@@ -356,12 +371,13 @@ const MoonBody = ({
           moonGroupRef.current.getWorldPosition(worldPosition); // Gets the true moving position [cite: 2025-12-11]
           focusOnPlanet(worldPosition, moonRadius, onFocusComplete);
         }}
-        castShadow
-        receiveShadow
       >
-        <sphereGeometry args={[moonRadius, 24, 24]} />
-        <meshStandardMaterial map={moonTexture} color={moonColor} roughness={0.85} metalness={0.08} />
+        <sphereGeometry args={[moonRadius, 16, 12]} />
+        <meshBasicMaterial map={moonTexture} color={moonColor} toneMapped={false} />
       </mesh>
+      <sprite ref={moonSpriteRef} visible={false} scale={[moonRadius * 2.2, moonRadius * 2.2, 1]}>
+        <spriteMaterial color={moonColor} opacity={0.85} transparent depthWrite={false} />
+      </sprite>
       {/* Moons have no significant magnetosphere — no aurora oval */}
     </group>
   );
@@ -393,9 +409,11 @@ const PlanetBody = ({
   epochYearRef?: MutableRefObject<number>;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null!);
+  const spriteRef = useRef<THREE.Sprite>(null!);
   const groupRef = useRef<THREE.Group>(null!);
   const saturnRingRef = useRef<THREE.Mesh>(null);
   const { focusOnPlanet } = useCameraFocus();
+  const { camera } = useThree();
   const tooltipHandlers = usePlanetTooltip(name);
   const constants = SYSTEM_CONSTANTS[name];
   const fact = facts.get(name);
@@ -410,6 +428,22 @@ const PlanetBody = ({
       registerRef(name, groupRef.current);
     }
   }, [name, registerRef]);
+
+  useEffect(() => {
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+  }, [texture]);
+
+  useEffect(() => {
+    nightTexture.generateMipmaps = false;
+    nightTexture.minFilter = THREE.LinearFilter;
+    nightTexture.magFilter = THREE.LinearFilter;
+    nightTexture.anisotropy = 1;
+    nightTexture.needsUpdate = true;
+  }, [nightTexture]);
 
   const radius = useMemo(() => {
     const base = fact?.gravity ?? 7;
@@ -443,6 +477,12 @@ const PlanetBody = ({
     if (saturnRingRef.current) {
       saturnRingRef.current.rotation.z += 0.0003;
     }
+
+    const distance = camera.position.distanceTo(groupRef.current.position);
+    const lodThreshold = name === 'Earth' ? 360 : 220;
+    const far = distance > lodThreshold;
+    if (meshRef.current) meshRef.current.visible = !far;
+    if (spriteRef.current) spriteRef.current.visible = far;
   });
 
   return (
@@ -479,22 +519,21 @@ const PlanetBody = ({
           focusOnPlanet(groupRef.current.position.clone(), radius, onFocusComplete);
         }}
         {...tooltipHandlers}
-        castShadow
-        receiveShadow
       >
-        <sphereGeometry args={[radius, 48, 48]} />
+        <sphereGeometry args={[radius, 16, 12]} />
         {name === 'Earth' ? (
           <EarthMaterial dayMap={texture} nightMap={nightTexture} />
         ) : (
-          <meshStandardMaterial 
+          <meshBasicMaterial
             map={texture} 
-            roughness={0.9} 
-            metalness={0.1}
-            emissive={constants.colour} 
-            emissiveIntensity={0.05} 
+            color={constants.colour}
+            toneMapped={false}
           />
         )}
       </mesh>
+      <sprite ref={spriteRef} visible={false} scale={[radius * 2.4, radius * 2.4, 1]}>
+        <spriteMaterial color={constants.colour} opacity={0.9} transparent depthWrite={false} />
+      </sprite>
 
       {/* Fresnel atmospheric blue halo — Earth only */}
       {name === 'Earth' && <EarthAtmosphericHalo radius={radius} />}
@@ -511,8 +550,8 @@ const PlanetBody = ({
 
       {name === 'Saturn' && (
         <mesh ref={saturnRingRef} rotation={[Math.PI / 2.15, 0, 0]}>
-          <ringGeometry args={[radius * 1.35, radius * 2.2, 128]} />
-          <meshStandardMaterial color="#d7c3a1" transparent opacity={0.55} side={THREE.DoubleSide} />
+          <ringGeometry args={[radius * 1.35, radius * 2.2, 64]} />
+          <meshBasicMaterial color="#d7c3a1" transparent opacity={0.5} side={THREE.DoubleSide} toneMapped={false} />
         </mesh>
       )}
 

@@ -45,6 +45,10 @@ interface OracleExplanation {
 
 export function useNeuralOracle() {
   const workerRef = useRef<Worker | null>(null);
+  const initializedRef = useRef(false);
+  const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+  const lowMemoryDevice = deviceMemory < 16;
+  const [modelOptIn, setModelOptIn] = useState(false);
   const [provider, setProvider] = useState<'transformers-webgpu' | 'rules-fallback'>('rules-fallback');
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,7 +57,11 @@ export function useNeuralOracle() {
   const [messages, setMessages] = useState<OracleReply[]>([]);
   const [explanation, setExplanation] = useState<OracleExplanation | null>(null);
 
-  useEffect(() => {
+  const ensureWorker = useCallback(() => {
+    if (workerRef.current) {
+      return workerRef.current;
+    }
+
     const worker = new Worker(new URL('../workers/oracleWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
 
@@ -93,34 +101,64 @@ export function useNeuralOracle() {
       setError(ev.message);
     };
 
-    worker.postMessage({ type: 'INIT' });
+    return worker;
+  }, []);
 
+  const initIfNeeded = useCallback(() => {
+    const worker = ensureWorker();
+    if (initializedRef.current) {
+      return worker;
+    }
+
+    initializedRef.current = true;
+    worker.postMessage({ type: 'INIT', forceRulesFallback: lowMemoryDevice || !modelOptIn });
+    return worker;
+  }, [ensureWorker, lowMemoryDevice, modelOptIn]);
+
+  useEffect(() => {
     return () => {
-      worker.terminate();
+      if (workerRef.current) {
+        workerRef.current.terminate();
+      }
       workerRef.current = null;
+      initializedRef.current = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (!ready || !initializedRef.current) {
+      return;
+    }
+    if (!lowMemoryDevice && modelOptIn && provider === 'rules-fallback') {
+      initializedRef.current = false;
+      setReady(false);
+      initIfNeeded();
+    }
+  }, [initIfNeeded, lowMemoryDevice, modelOptIn, provider, ready]);
+
   const ask = useCallback((prompt: string, snapshot: HazardTelemetryModel) => {
-    if (!workerRef.current || !prompt.trim()) return;
+    if (!prompt.trim()) return;
+    const worker = initIfNeeded();
 
     setError(null);
     setLoading(true);
     setMessages((prev) => [...prev, { role: 'user', text: prompt.trim(), at: Date.now() }]);
-    workerRef.current.postMessage({ type: 'ASK', prompt: prompt.trim(), snapshot });
-  }, []);
+    worker.postMessage({ type: 'ASK', prompt: prompt.trim(), snapshot });
+  }, [initIfNeeded]);
 
   const explain = useCallback((mode: 'global' | 'local', snapshot: HazardTelemetryModel, prompt?: string) => {
-    if (!workerRef.current) return;
+    const worker = initIfNeeded();
 
     setError(null);
     setExplaining(true);
-    workerRef.current.postMessage({ type: 'EXPLAIN', mode, snapshot, prompt });
-  }, []);
+    worker.postMessage({ type: 'EXPLAIN', mode, snapshot, prompt });
+  }, [initIfNeeded]);
 
   return {
     provider,
     ready,
+    lowMemoryDevice,
+    modelOptIn,
     loading,
     explaining,
     error,
@@ -128,5 +166,6 @@ export function useNeuralOracle() {
     explanation,
     ask,
     explain,
+    setModelOptIn,
   };
 }

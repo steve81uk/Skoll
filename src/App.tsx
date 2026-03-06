@@ -67,8 +67,9 @@ type DockStatus = 'green' | 'amber' | 'red';
 type DockSide = 'left' | 'right';
 type DockPanelAnchor = { top: number; left?: number; right?: number };
 type CommandMenuAnchor = { top: number; left: number };
+type TimelineContextMenu = { x: number; y: number } | null;
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
-const TIME_EXPLORER_BASE_HEIGHT = 132;
+const TIME_EXPLORER_BASE_HEIGHT = 64;
 
 const LazyPlanetRenderer = lazy(() => import('./components/PlanetRenderer').then((module) => ({ default: module.PlanetRenderer })));
 const LazyCMEPropagationVisualizer = lazy(() =>
@@ -153,6 +154,14 @@ const SurfaceGroundPlane = ({ planetName }: { planetName: BodyName | null }) => 
   const texturePath = textureMap[textureTarget] || '/textures/8k_earth_daymap.jpg';
   const texture = useLoader(THREE.TextureLoader, texturePath);
 
+  useEffect(() => {
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+  }, [texture]);
+
   return (
     <mesh position={[0, -5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[420, 420, 256, 256]} />
@@ -227,6 +236,39 @@ const MissionUTCTime = () => {
   );
 };
 
+const SceneInvalidationController = ({ animate, nonce }: { animate: boolean; nonce: number }) => {
+  const { invalidate } = useThree();
+
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, nonce]);
+
+  useEffect(() => {
+    if (!animate) {
+      return;
+    }
+
+    const id = window.setInterval(() => {
+      invalidate();
+    }, 1000 / 24);
+
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [animate, invalidate]);
+
+  return null;
+};
+
+const formatTimelineDate = (value: Date) => value.toLocaleDateString('en-US', {
+  month: 'short',
+  day: '2-digit',
+  year: 'numeric',
+  timeZone: 'UTC',
+}).toUpperCase();
+
+const formatTimelineTime = (value: Date) => value.toISOString().slice(11, 19);
+
 export default function App() {
   const [booted, setBooted] = useState(false);
   const [texturesLoaded, setTexturesLoaded] = useState(false);
@@ -264,8 +306,12 @@ export default function App() {
   const [controlBarHeight, setControlBarHeight] = useState(92);
   const [timeExplorerHeight, setTimeExplorerHeight] = useState(TIME_EXPLORER_BASE_HEIGHT);
   const [isTimePlaying, setIsTimePlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [timelineContextMenu, setTimelineContextMenu] = useState<TimelineContextMenu>(null);
   const [fps, setFps] = useState(60);
   const [lstmLatencyMs, setLstmLatencyMs] = useState<number | null>(null);
+  const [sceneInvalidateNonce, setSceneInvalidateNonce] = useState(0);
+  const [panelOpenOrder, setPanelOpenOrder] = useState<string[]>([]);
   const inferDispatchRef = useRef<number | null>(null);
   const [location] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
   const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
@@ -278,6 +324,7 @@ export default function App() {
   const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const dockPanelRef = useRef<HTMLDivElement | null>(null);
   const commandMenuRef = useRef<HTMLDivElement | null>(null);
+  const holdScrubRef = useRef<number | null>(null);
 
   /** Master Reset — clears every active simulation in one click. */
   const handleMasterReset = useCallback(() => {
@@ -292,6 +339,7 @@ export default function App() {
     setApophisVisible(false);
     setImpactBurstActive(false);
     setSelectedEpochYear(new Date().getFullYear());
+    setPlaybackRate(1);
   }, []);
   const telemetry = useGlobalTelemetry();
   const isReversal = selectedEpochYear <= -66_000_000;
@@ -1230,22 +1278,134 @@ export default function App() {
     setIsTimePlaying(false);
   }, []);
 
+  const requestSceneInvalidate = useCallback(() => {
+    setSceneInvalidateNonce((prev) => (prev + 1) % 100000);
+  }, []);
+
+  const closePanelByKey = useCallback((panelKey: string) => {
+    if (panelKey.startsWith('menu:')) {
+      setOpenMenuId(null);
+      setCommandMenuAnchor(null);
+      return;
+    }
+
+    if (panelKey.startsWith('dock:')) {
+      setDockModalTileId(null);
+      setDockPanelAnchor(null);
+      return;
+    }
+
+    if (panelKey === 'scene:iss') setShowISS(false);
+    if (panelKey === 'scene:apophis') setApophisVisible(false);
+    if (panelKey === 'scene:heliopause') setHeliopauseVisible(false);
+    if (panelKey === 'scene:blackout') setBlackoutVisible(false);
+  }, []);
+
+  const stopHoldScrub = useCallback(() => {
+    if (holdScrubRef.current != null) {
+      window.clearInterval(holdScrubRef.current);
+      holdScrubRef.current = null;
+    }
+  }, []);
+
+  const startHoldScrub = useCallback((days = 0, months = 0, years = 0, intervalMs = 130) => {
+    stopHoldScrub();
+    shiftViewingDate(days, months, years);
+    holdScrubRef.current = window.setInterval(() => {
+      shiftViewingDate(days, months, years);
+    }, intervalMs);
+  }, [shiftViewingDate, stopHoldScrub]);
+
   useEffect(() => {
-    if (!isTimePlaying) {
+    if (!isTimePlaying || playbackRate === 0) {
       return;
     }
 
     const tick = window.setInterval(() => {
       setCurrentDate((prev) => {
         const base = prev === 'LIVE' ? new Date() : new Date(prev);
-        const next = new Date(base.getTime() + 6 * 60 * 60 * 1000);
+        const next = new Date(base.getTime() + playbackRate * 45 * 60 * 1000);
         setSelectedEpochYear(next.getUTCFullYear());
         return next;
       });
+      requestSceneInvalidate();
     }, 250);
 
     return () => window.clearInterval(tick);
-  }, [isTimePlaying]);
+  }, [isTimePlaying, playbackRate, requestSceneInvalidate]);
+
+  useEffect(() => {
+    return () => {
+      stopHoldScrub();
+    };
+  }, [stopHoldScrub]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => !entry.startsWith('menu:'));
+      if (!openMenuId || !activeSubTileId) {
+        return next;
+      }
+      const key = `menu:${activeSubTileId}`;
+      return [...next.filter((entry) => entry !== key), key];
+    });
+  }, [activeSubTileId, openMenuId]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => !entry.startsWith('dock:'));
+      if (!dockModalTileId) {
+        return next;
+      }
+      const key = `dock:${dockModalTileId}`;
+      return [...next.filter((entry) => entry !== key), key];
+    });
+  }, [dockModalTileId]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => entry !== 'scene:iss');
+      return showISS ? [...next, 'scene:iss'] : next;
+    });
+  }, [showISS]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => entry !== 'scene:apophis');
+      return apophisVisible ? [...next, 'scene:apophis'] : next;
+    });
+  }, [apophisVisible]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => entry !== 'scene:heliopause');
+      return heliopauseVisible ? [...next, 'scene:heliopause'] : next;
+    });
+  }, [heliopauseVisible]);
+
+  useEffect(() => {
+    setPanelOpenOrder((prev) => {
+      const next = prev.filter((entry) => entry !== 'scene:blackout');
+      return blackoutVisible ? [...next, 'scene:blackout'] : next;
+    });
+  }, [blackoutVisible]);
+
+  useEffect(() => {
+    if (panelOpenOrder.length <= 5) {
+      return;
+    }
+
+    const oldest = panelOpenOrder[0];
+    if (!oldest) {
+      return;
+    }
+
+    closePanelByKey(oldest);
+  }, [closePanelByKey, panelOpenOrder]);
+
+  useEffect(() => {
+    requestSceneInvalidate();
+  }, [effectiveDate, showISS, cmeActive, cmeImpactActive, impactBurstActive, carringtonActive, apophisVisible, blackoutVisible, heliopauseVisible, requestSceneInvalidate]);
 
   // Check if current date matches a historical event
   const currentHistoricalEvent = useMemo(() => {
@@ -1418,24 +1578,36 @@ export default function App() {
       <div className="fixed inset-0 z-0 pointer-events-auto">
         <SlateErrorBoundary moduleName="Observa-Scene" fallback={<div className="absolute inset-0 bg-black/40" />}>
           <Canvas
-            shadows
-            dpr={[1, 1.5]}
-            gl={{ antialias: true, alpha: true, logarithmicDepthBuffer: true }}
-            onCreated={({ gl }) => {
-              gl.shadowMap.enabled = true;
-              gl.shadowMap.type = THREE.PCFShadowMap;
+            frameloop="demand"
+            dpr={[0.75, 1]}
+            gl={{ antialias: false, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
+            onCreated={(state) => {
+              const gl = state.gl;
+              gl.shadowMap.enabled = false;
+              const context = gl.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
+              const debugInfo = context.getExtension('WEBGL_debug_renderer_info');
+              if (debugInfo) {
+                console.log('GPU Vendor:', context.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+                console.log('GPU Renderer:', context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+              }
+              console.log('Max texture size:', context.getParameter(context.MAX_TEXTURE_SIZE));
+              console.log('Max vertex attribs:', context.getParameter(context.MAX_VERTEX_ATTRIBS));
               setTexturesLoaded(true);
             }}
             style={{ position: 'absolute', insetBlockStart: 0, insetInlineStart: 0, zIndex: 0 }}
           >
+            <SceneInvalidationController
+              animate={isTimePlaying || cmeActive || cmeImpactActive || impactBurstActive || carringtonActive || showISS}
+              nonce={sceneInvalidateNonce}
+            />
             <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} />
             <EnhancedStarfield />
             {/* Local Interstellar Cloud — warm LIC shell enveloping the scene */}
             <LocalInterstellarCloud />
             {/* Heliopause — outer heliosphere boundary (user-toggled) */}
             <HeliopauseShell visible={heliopauseVisible} />
-            <ambientLight intensity={0.15} />
-            <pointLight position={[0, 0, 0]} intensity={5} color="#fffae5" decay={2} distance={2000} castShadow />
+            <hemisphereLight intensity={0.22} color="#bbdcff" groundColor="#06080f" />
+            <directionalLight position={[120, 80, 40]} intensity={0.7} color="#fffae5" />
 
             {/* THE SUN: RENDERED IN HELIOCENTRIC MODE */}
             {viewMode === 'HELIOCENTRIC' && (
@@ -1553,7 +1725,14 @@ export default function App() {
               )}
             </Suspense>
 
-            <OrbitControls enablePan enableZoom makeDefault minDistance={0.1} maxDistance={100000} />
+            <OrbitControls
+              enablePan
+              enableZoom
+              makeDefault
+              minDistance={0.1}
+              maxDistance={100000}
+              onChange={requestSceneInvalidate}
+            />
             (
               <Suspense fallback={null}>
                 <LazyCinematicPostFX
@@ -1918,6 +2097,8 @@ export default function App() {
               <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
               <span className="mx-1 text-cyan-500/40">|</span>
               <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
+              <span className="mx-1 text-cyan-500/40">|</span>
+              <span className="telemetry-value">PANELS {panelOpenOrder.length}</span>
             </div>
           </div>
 
@@ -1925,57 +2106,66 @@ export default function App() {
             ref={timeExplorerRef}
             className="time-explorer fixed inset-x-0 bottom-0 z-[9998] pointer-events-auto"
           >
-            <div className="mx-auto max-w-[1280px] px-4 py-2.5 flex flex-col gap-2">
-              <div className="flex items-center justify-center gap-1.5">
-                {[
-                  { label: '◄◄1Y', action: () => shiftViewingDate(0, 0, -1) },
-                  { label: '◄◄6M', action: () => shiftViewingDate(0, -6, 0) },
-                  { label: '◄◄1M', action: () => shiftViewingDate(0, -1, 0) },
-                  { label: '◄◄15D', action: () => shiftViewingDate(-15, 0, 0) },
-                  { label: '◄◄5D', action: () => shiftViewingDate(-5, 0, 0) },
-                ].map((control) => (
-                  <button
-                    key={control.label}
-                    type="button"
-                    onClick={control.action}
-                    className="time-jump-btn"
-                  >
-                    {control.label}
-                  </button>
-                ))}
-                <button type="button" onClick={() => shiftViewingDate(-1, 0, 0)} className="time-jump-btn">◄</button>
+            <div className="mx-auto max-w-[1280px] px-4 py-1.5 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-3 text-[9px] uppercase tracking-[0.12em] text-cyan-100">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsTimePlaying((prev) => !prev);
-                    if (currentDate === 'LIVE') {
-                      setViewingDate(new Date());
-                    }
+                    setIsTimePlaying(false);
+                    setCurrentDate('LIVE');
+                    setSelectedEpochYear(new Date().getUTCFullYear());
+                    requestSceneInvalidate();
                   }}
-                  className="time-jump-btn time-jump-btn-primary"
+                  className={`timeline-status-link inline-flex items-center gap-1.5 ${currentDate === 'LIVE' ? 'is-live' : 'is-historical'}`}
                 >
-                  {isTimePlaying ? '❚❚' : '▶'}
+                  <span className="time-live-dot" />
+                  {currentDate === 'LIVE' ? 'LIVE' : `VIEWING ${formatTimelineDate(effectiveDate)}`}
                 </button>
-                <button type="button" onClick={() => shiftViewingDate(1, 0, 0)} className="time-jump-btn">►</button>
-                {[
-                  { label: '5D►►', action: () => shiftViewingDate(5, 0, 0) },
-                  { label: '15D►►', action: () => shiftViewingDate(15, 0, 0) },
-                  { label: '1M►►', action: () => shiftViewingDate(0, 1, 0) },
-                  { label: '6M►►', action: () => shiftViewingDate(0, 6, 0) },
-                  { label: '1Y►►', action: () => shiftViewingDate(0, 0, 1) },
-                ].map((control) => (
-                  <button
-                    key={control.label}
-                    type="button"
-                    onClick={control.action}
-                    className="time-jump-btn"
-                  >
-                    {control.label}
-                  </button>
-                ))}
+                <div className="min-w-0 truncate">{formatTimelineDate(effectiveDate)}</div>
+                <div>{playbackRate === 1 ? 'REAL RATE' : `${playbackRate}X`}</div>
+                <div className="shrink-0">{formatTimelineTime(nowUtc)} UTC</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTimePlaying(false);
+                    setCurrentDate('LIVE');
+                    setSelectedEpochYear(new Date().getUTCFullYear());
+                  }}
+                  className="timeline-mini-link"
+                >
+                  NOW
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTimePlaying(false);
+                    handleMasterReset();
+                    setCurrentDate('LIVE');
+                    setSelectedEpochYear(new Date().getUTCFullYear());
+                    requestSceneInvalidate();
+                  }}
+                  className="timeline-mini-link"
+                >
+                  RESET
+                </button>
               </div>
 
-              <div className="px-1">
+              <div
+                className="time-track px-1"
+                onWheel={(event) => {
+                  event.preventDefault();
+                  setIsTimePlaying(true);
+                  setPlaybackRate((prev) => {
+                    const delta = event.deltaY < 0 ? 1 : -1;
+                    const next = Math.max(-20, Math.min(20, prev + delta));
+                    return next === 0 ? (delta > 0 ? 1 : -1) : next;
+                  });
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setTimelineContextMenu({ x: event.clientX, y: event.clientY });
+                }}
+              >
                 <input
                   type="range"
                   className="time-explorer-slider"
@@ -1986,49 +2176,126 @@ export default function App() {
                   onChange={(event) => {
                     setIsTimePlaying(false);
                     setViewingDate(new Date(Number(event.currentTarget.value)));
+                    requestSceneInvalidate();
                   }}
                   aria-label="Time explorer slider"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 text-[9px] uppercase tracking-[0.1em] text-cyan-100">
-                  <span className="text-cyan-500/70 mr-2 tracking-[0.18em] text-[8px]">Time Explorer</span>
-                  {currentDate === 'LIVE'
-                    ? <span className="inline-flex items-center gap-1.5"><span className="time-live-dot" />VIEWING LIVE</span>
-                    : `Viewing: ${effectiveDate.toISOString().slice(0, 19).replace('T', ' ')} UTC`}
-                </div>
-                <div className="text-[9px] uppercase tracking-[0.1em] text-cyan-100 whitespace-nowrap">
-                  <span className="text-cyan-500/70 mr-2 tracking-[0.18em] text-[8px]">Now:</span>
-                  {nowUtc.toISOString().slice(0, 19).replace('T', ' ')} UTC
-                </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  className="transport-btn"
+                  onClick={() => shiftViewingDate(0, -1, 0)}
+                  onDoubleClick={() => shiftViewingDate(0, 0, -1)}
+                  onMouseDown={() => startHoldScrub(-1, 0, 0, 120)}
+                  onMouseUp={stopHoldScrub}
+                  onMouseLeave={stopHoldScrub}
+                >
+                  ◄◄
+                </button>
+                <button
+                  type="button"
+                  className="transport-btn"
+                  onClick={() => shiftViewingDate(-1, 0, 0)}
+                  onMouseDown={() => startHoldScrub(-1, 0, 0, 150)}
+                  onMouseUp={stopHoldScrub}
+                  onMouseLeave={stopHoldScrub}
+                >
+                  ◄
+                </button>
+                <button
+                  type="button"
+                  className="transport-btn transport-play"
+                  onClick={() => {
+                    setIsTimePlaying((prev) => !prev);
+                    if (currentDate === 'LIVE') {
+                      setViewingDate(new Date());
+                    }
+                    requestSceneInvalidate();
+                  }}
+                >
+                  {isTimePlaying ? '❚❚' : '▶'}
+                </button>
+                <button
+                  type="button"
+                  className="transport-btn"
+                  onClick={() => shiftViewingDate(1, 0, 0)}
+                  onMouseDown={() => startHoldScrub(1, 0, 0, 150)}
+                  onMouseUp={stopHoldScrub}
+                  onMouseLeave={stopHoldScrub}
+                >
+                  ►
+                </button>
+                <button
+                  type="button"
+                  className="transport-btn"
+                  onClick={() => shiftViewingDate(0, 1, 0)}
+                  onDoubleClick={() => shiftViewingDate(0, 0, 1)}
+                  onMouseDown={() => startHoldScrub(1, 0, 0, 120)}
+                  onMouseUp={stopHoldScrub}
+                  onMouseLeave={stopHoldScrub}
+                >
+                  ►►
+                </button>
               </div>
 
-              <div className="flex items-center justify-end gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimePlaying(false);
-                    setCurrentDate('LIVE');
-                    setSelectedEpochYear(new Date().getFullYear());
-                  }}
-                  className="time-jump-btn"
+              {panelOpenOrder.length > 3 && (
+                <div className="text-[8px] uppercase tracking-[0.1em] text-amber-300/90 text-center">
+                  Multiple panels open — close unused panels for better performance
+                </div>
+              )}
+
+              {timelineContextMenu && (
+                <div
+                  className="fixed z-[10020] rounded border border-cyan-500/35 bg-black/90 p-1 min-w-[180px]"
+                  style={{ left: timelineContextMenu.x, top: timelineContextMenu.y }}
                 >
-                  NOW
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimePlaying(false);
-                    handleMasterReset();
-                    setCurrentDate('LIVE');
-                    setSelectedEpochYear(new Date().getFullYear());
-                  }}
-                  className="time-jump-btn"
-                >
-                  RESET
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className="timeline-context-item"
+                    onClick={() => {
+                      const input = window.prompt('Go to date (UTC ISO format):', effectiveDate.toISOString().slice(0, 10));
+                      if (input) {
+                        const parsed = new Date(`${input}T00:00:00Z`);
+                        if (!Number.isNaN(parsed.getTime())) {
+                          setViewingDate(parsed);
+                        }
+                      }
+                      setTimelineContextMenu(null);
+                    }}
+                  >
+                    Go to date…
+                  </button>
+                  <button
+                    type="button"
+                    className="timeline-context-item"
+                    onClick={() => {
+                      shiftViewingDate(0, 0, -1);
+                      setTimelineContextMenu(null);
+                    }}
+                  >
+                    Jump back 1 year
+                  </button>
+                  <button
+                    type="button"
+                    className="timeline-context-item"
+                    onClick={() => {
+                      shiftViewingDate(0, 0, 1);
+                      setTimelineContextMenu(null);
+                    }}
+                  >
+                    Jump forward 1 year
+                  </button>
+                  <button
+                    type="button"
+                    className="timeline-context-item"
+                    onClick={() => setTimelineContextMenu(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </>

@@ -1,5 +1,5 @@
 import { useRef, useMemo } from 'react';
-import { useFrame, extend } from '@react-three/fiber';
+import { extend } from '@react-three/fiber';
 import { shaderMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -127,15 +127,9 @@ export default function LocalInterstellarCloud() {
 
   // Build geometry once — high-poly sphere for smooth noise sampling
   const geometry = useMemo(
-    () => new THREE.SphereGeometry(500, 64, 64),
+    () => new THREE.SphereGeometry(500, 24, 16),
     [],
   );
-
-  useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uTime = clock.getElapsedTime();
-    }
-  });
 
   return (
     <mesh geometry={geometry}>

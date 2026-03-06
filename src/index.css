@@ -23,7 +23,7 @@
 :root {
   color-scheme: dark;
   --dock-width: 2.25rem;
-  --time-explorer-height: 132px;
+  --time-explorer-height: 64px;
   
   /* SKÖLL-TRACK Aurora Palette */
   --wolf-cyan: #06D6A0;        /* Sköll's eyes */
@@ -448,6 +448,84 @@ canvas {
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5), 0 -1px 12px rgba(0, 255, 170, 0.06);
 }
 
+.time-track {
+  height: 3px;
+  border-radius: 2px;
+  position: relative;
+  background: linear-gradient(90deg, rgba(0, 255, 170, 0.05) 0%, rgba(0, 255, 170, 0.2) 50%, rgba(0, 255, 170, 0.05) 100%);
+}
+
+.time-track::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 255, 170, 0.06) 50%, transparent 100%);
+  filter: blur(6px);
+  z-index: -1;
+}
+
+.transport-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.transport-btn:hover {
+  border-color: rgba(0, 255, 170, 0.3);
+  color: #00ffaa;
+  background: rgba(0, 255, 170, 0.05);
+}
+
+.transport-play {
+  width: 38px;
+  height: 38px;
+  border-color: rgba(0, 255, 170, 0.24);
+}
+
+.timeline-status-link {
+  color: rgba(220, 255, 245, 0.85);
+}
+
+.timeline-status-link.is-historical .time-live-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.45);
+}
+
+.timeline-mini-link {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: rgba(170, 232, 255, 0.76);
+  border-bottom: 1px solid transparent;
+}
+
+.timeline-mini-link:hover {
+  color: rgba(220, 255, 250, 0.95);
+  border-bottom-color: rgba(0, 255, 170, 0.55);
+}
+
+.timeline-context-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  font-size: 10px;
+  color: rgba(206, 250, 255, 0.9);
+  border-radius: 0.25rem;
+}
+
+.timeline-context-item:hover {
+  background: rgba(0, 255, 170, 0.1);
+}
+
 .time-jump-btn {
   height: 32px;
   padding-inline: 8px;
@@ -482,32 +560,30 @@ canvas {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 2px;
+  height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(0, 90, 90, 0.42), rgba(5, 58, 96, 0.66), rgba(0, 90, 90, 0.42));
-  box-shadow: 0 0 8px rgba(0, 255, 170, 0.3);
+  background: transparent;
+  box-shadow: none;
 }
 
 .time-explorer-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
-  border: 1px solid rgba(20, 255, 220, 0.75);
-  background: radial-gradient(circle, rgba(130, 255, 255, 0.95) 0%, rgba(34, 211, 238, 0.9) 45%, rgba(34, 211, 238, 0.08) 100%);
-  box-shadow: 0 0 10px rgba(20, 255, 220, 0.35);
-  animation: timeThumbPulse 2s ease-in-out infinite;
+  border: 1px solid rgba(0, 255, 170, 0.8);
+  background: radial-gradient(circle, #00ffaa 0%, rgba(0, 255, 170, 0.32) 70%, transparent 100%);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.5);
 }
 
 .time-explorer-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
-  border: 1px solid rgba(20, 255, 220, 0.75);
-  background: radial-gradient(circle, rgba(130, 255, 255, 0.95) 0%, rgba(34, 211, 238, 0.9) 45%, rgba(34, 211, 238, 0.08) 100%);
-  box-shadow: 0 0 10px rgba(20, 255, 220, 0.35);
-  animation: timeThumbPulse 2s ease-in-out infinite;
+  border: 1px solid rgba(0, 255, 170, 0.8);
+  background: radial-gradient(circle, #00ffaa 0%, rgba(0, 255, 170, 0.32) 70%, transparent 100%);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.5);
 }
 
 @keyframes timeThumbPulse {

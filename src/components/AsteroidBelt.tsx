@@ -17,7 +17,7 @@ const AU_SCALE      = 60;
 const BELT_INNER_AU = 2.15;   // just outside Mars
 const BELT_OUTER_AU = 3.30;   // just inside Jupiter's resonance gap
 const BELT_HEIGHT   = 0.18;   // AU off-ecliptic (± half-value)
-const ASTEROID_COUNT = 2200;
+const ASTEROID_COUNT = 900;
 
 // Keplerian mean-motion: normalized so Earth (1 AU) completes 1 rev per 60 s of animation
 // Outer asteroids orbit slower: ω ∝ r^(-3/2)
@@ -177,7 +177,7 @@ export const AsteroidBelt = () => {
       <instancedMesh
         ref={meshRef}
         args={[geo, mat, ASTEROID_COUNT]}
-        frustumCulled={false}
+        frustumCulled
         onClick={handleClick}
       />
 
