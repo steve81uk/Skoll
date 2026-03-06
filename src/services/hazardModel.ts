@@ -10,6 +10,9 @@ export interface HazardTelemetryModel {
   bzGsm: number;
   bt: number;
   density: number;
+  totpot: number;
+  savncpp: number;
+  totusjz: number;
   flareClass: string;
   noaaFetchAgeSec: number | null;
   lstmLatencyMs: number | null;
@@ -45,6 +48,9 @@ export function createHazardTelemetryModel(
     bzGsm: noaa.bundle?.bzGsm ?? -2,
     bt: noaa.bundle?.bt ?? 6,
     density: noaa.bundle?.density ?? 5,
+    totpot: noaa.bundle?.totpot ?? Math.max(0, (noaa.bundle?.bt ?? 6) ** 2 * Math.max(0, -(noaa.bundle?.bzGsm ?? -2)) * (noaa.bundle?.speed ?? 450) * 0.002),
+    savncpp: noaa.bundle?.savncpp ?? Math.max(0, 0.42 * Math.max(0, -(noaa.bundle?.bzGsm ?? -2)) * (noaa.bundle?.density ?? 5) + 0.58 * (noaa.bundle?.latestKp ?? 2.5)),
+    totusjz: noaa.bundle?.totusjz ?? Math.max(0, (noaa.bundle?.bt ?? 6) * Math.max(0, -(noaa.bundle?.bzGsm ?? -2)) * 0.7 + (noaa.bundle?.density ?? 5) * 0.9),
     flareClass: goes.flareClass,
     noaaFetchAgeSec,
     lstmLatencyMs,

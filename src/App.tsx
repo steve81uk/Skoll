@@ -1,14 +1,12 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Orbit, Radio, BarChart2, Zap, Mic, MicOff } from 'lucide-react';
+import { Orbit } from 'lucide-react';
 import * as THREE from 'three';
 import { useCameraFocus } from './hooks/useCameraFocus';
-import { useSolarFlareAudio } from './hooks/useSolarFlareAudio';
-import { useSpeechCommands } from './hooks/useSpeechCommands';
-import type { SpeechAction } from './hooks/useSpeechCommands';
 import { NeuralBoot } from './components/NeuralBoot';
 import { TelemetryRibbon } from './components/TelemetryRibbon';
 import { PlanetDiagnosticsSlate } from './components/PlanetDiagnosticsSlate';
@@ -31,7 +29,6 @@ import { GlobalMagneticGrid } from './components/GlobalMagneticGrid';
 import { DSNLiveLink } from './components/DSNLiveLink';
 import { DataAlchemistDashboard } from './components/DataAlchemistDashboard';
 import { LiveSyncBadgeCompact } from './components/LiveSyncBadge';
-import LocationSwitcher, { LOCATION_PRESETS } from './components/LocationSwitcher';
 import type { LocationPreset } from './components/LocationSwitcher';
 import EarthBowShock from './components/EarthBowShock';
 import LiveISS, { LiveISSHUD } from './components/LiveISS';
@@ -55,7 +52,10 @@ import RadioBlackoutHeatmap from './components/RadioBlackoutHeatmap';
 import { useLSTMWorker } from './hooks/useLSTMWorker';
 import { useGOESFlux } from './hooks/useGOESFlux';
 import { useNOAADONKI } from './hooks/useNOAADONKI';
+import { useSpaceWeatherProviders } from './hooks/useSpaceWeatherProviders';
+import { useAurorEyeTimelineSync } from './hooks/useAurorEyeTimelineSync';
 import { createHazardTelemetryModel } from './services/hazardModel';
+import type { AurorEyeFrameInput, TelemetryTimelinePoint } from './services/aurorEyeSync';
 import eventsData from './ml/space_weather_events.json';
 
 type ViewMode = 'HELIOCENTRIC' | 'SURFACE';
@@ -65,8 +65,10 @@ type FXQuality = 'LOW' | 'HIGH';
 type DockTone = 'telemetry' | 'forecast' | 'sim';
 type DockStatus = 'green' | 'amber' | 'red';
 type DockSide = 'left' | 'right';
-type PerfChipPosition = { x: number; y: number };
+type DockPanelAnchor = { top: number; left?: number; right?: number };
+type CommandMenuAnchor = { top: number; left: number };
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
+const TIME_EXPLORER_BASE_HEIGHT = 132;
 
 const LazyPlanetRenderer = lazy(() => import('./components/PlanetRenderer').then((module) => ({ default: module.PlanetRenderer })));
 const LazyCMEPropagationVisualizer = lazy(() =>
@@ -241,7 +243,6 @@ export default function App() {
   const [fxQuality, setFxQuality] = useState<FXQuality>('HIGH');
   const [impactBurstActive, setImpactBurstActive] = useState(false);
   const [selectedTileId, setSelectedTileId] = useState<string>('mission-core');
-  const [, setHiddenTileIds] = useState<string[]>([]);
   const [selectedEpochYear, setSelectedEpochYear] = useState<number>(2026);
   const [showISS, setShowISS] = useState(false);
   const [syntheticCME, setSyntheticCME] = useState<SyntheticCME | null>(null);
@@ -256,38 +257,27 @@ export default function App() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [dockModalTileId, setDockModalTileId] = useState<string | null>(null);
   const [dockModalSide, setDockModalSide] = useState<DockSide>('left');
-  const [dockModalPinned, setDockModalPinned] = useState(false);
+  const [dockPanelAnchor, setDockPanelAnchor] = useState<DockPanelAnchor | null>(null);
+  const [commandMenuAnchor, setCommandMenuAnchor] = useState<CommandMenuAnchor | null>(null);
   const [hoveredDock, setHoveredDock] = useState<{ label: string; status: DockStatus; x: number; y: number; side: DockSide } | null>(null);
+  const [nowUtc, setNowUtc] = useState(() => new Date());
+  const [controlBarHeight, setControlBarHeight] = useState(92);
+  const [timeExplorerHeight, setTimeExplorerHeight] = useState(TIME_EXPLORER_BASE_HEIGHT);
+  const [isTimePlaying, setIsTimePlaying] = useState(false);
   const [fps, setFps] = useState(60);
   const [lstmLatencyMs, setLstmLatencyMs] = useState<number | null>(null);
-  const [perfChipPosition, setPerfChipPosition] = useState<PerfChipPosition>(() => {
-    const defaultPosition = { x: Math.max(16, window.innerWidth - 250), y: Math.max(16, window.innerHeight - 74) };
-    const saved = window.localStorage.getItem('skoll.perfChipPosition');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Partial<PerfChipPosition>;
-        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-          return { x: parsed.x, y: parsed.y };
-        }
-      } catch {
-        return defaultPosition;
-      }
-    }
-    return defaultPosition;
-  });
-  const perfChipDragRef = useRef<{ dragging: boolean; offsetX: number; offsetY: number }>({
-    dragging: false,
-    offsetX: 0,
-    offsetY: 0,
-  });
   const inferDispatchRef = useRef<number | null>(null);
-  const [location, setLocation] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
+  const [location] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
   const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
   const [hudMinimized] = useState(false);
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
   const [planetRefs, setPlanetRefs] = useState<Map<string, THREE.Group>>(new Map());
   const burstTimeoutRef = useRef<number | null>(null);
+  const envWarnedRef = useRef(false);
+  const controlBarRef = useRef<HTMLDivElement | null>(null);
+  const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const dockPanelRef = useRef<HTMLDivElement | null>(null);
+  const commandMenuRef = useRef<HTMLDivElement | null>(null);
 
   /** Master Reset — clears every active simulation in one click. */
   const handleMasterReset = useCallback(() => {
@@ -308,17 +298,12 @@ export default function App() {
 
   // ─── NOAA / DONKI live data (web worker) ────────────────────────────────────
   const noaaDonki = useNOAADONKI();
+  const aurorEyeFrames = useMemo<AurorEyeFrameInput[]>(() => [], []);
 
   // ─── LSTM off-thread inference (web worker) ─────────────────────────────────
   const lstmWorker = useLSTMWorker();
   const goesFlux = useGOESFlux();
-
-  // ─── Solar Flare spatial audio engine ──────────────────────────────────────
-  const { enabled: flareAudioEnabled, toggle: toggleFlareAudio } = useSolarFlareAudio({
-    intensity:      telemetry.currentIntensity ?? 1,
-    flareActive:    (telemetry.currentIntensity ?? 1) > 1.5 || (telemetry.windSpeed ?? 450) > 800,
-    solarWindSpeed: telemetry.windSpeed ?? 450,
-  });
+  const spaceWeatherProviders = useSpaceWeatherProviders(noaaDonki);
 
   // Debug logging
   useEffect(() => {
@@ -386,15 +371,7 @@ export default function App() {
   );
 
   const selectedTileLabel = tileCatalog.find((tile) => tile.id === selectedTileId)?.label ?? 'Mission Core';
-
-  const quickActions = useMemo(
-    () => [
-      { id: 'live-telemetry', label: 'Live Telemetry', icon: Radio },
-      { id: 'ml-forecasts',   label: 'ML Forecasts',   icon: BarChart2 },
-      { id: 'simulations',    label: 'Simulations',    icon: Zap },
-    ],
-    [],
-  );
+  const allToolIds = useMemo(() => tileCatalog.map((tile) => tile.id), [tileCatalog]);
 
   const menuGroups = useMemo<Record<string, string[]>>(
     () => ({
@@ -412,8 +389,9 @@ export default function App() {
         'sat-threat', 'human-impact', 'hangar', 'oracle', 'fireball', 'earth-dynamo',
         'planet-core', 'heliopause', 'grid-failure', 'radio-blackout',
       ],
+      'all-tools': allToolIds,
     }),
-    [],
+    [allToolIds],
   );
 
   const leftDockTiles = useMemo<Array<{ id: string; label: string; icon: string; tone: DockTone }>>(
@@ -439,6 +417,15 @@ export default function App() {
     ],
     [],
   );
+
+  const toDockStatus = useCallback((level?: 'green' | 'amber' | 'red'): DockStatus => {
+    if (level === 'red') return 'red';
+    if (level === 'amber') return 'amber';
+    return 'green';
+  }, []);
+
+  const ovationProvider = spaceWeatherProviders.byId['ovation-prime'];
+  const wsaEnlilProvider = spaceWeatherProviders.byId['wsa-enlil'];
 
   const dockToneClasses = useMemo<Record<DockTone, { idle: string; active: string }>>(
     () => ({
@@ -470,6 +457,12 @@ export default function App() {
       if (lstmWorker.inferring || lstmWorker.modelStatus === 'loading') return 'amber';
       return 'green';
     }
+    if (tileId === 'aurora-ovation') {
+      return toDockStatus(ovationProvider.health.level);
+    }
+    if (tileId === 'forecast-radar') {
+      return toDockStatus(wsaEnlilProvider.health.level);
+    }
     if (tileId === 'iss-track' || tileId === 'iss-stream') {
       return showISS ? 'green' : 'amber';
     }
@@ -477,17 +470,57 @@ export default function App() {
       return cmeActive || cmeImpactActive ? 'amber' : 'green';
     }
     return 'green';
-  }, [cmeActive, cmeImpactActive, lstmWorker.error, lstmWorker.inferring, lstmWorker.modelStatus, noaaDonki.error, noaaDonki.lastFetch, showISS]);
+  }, [cmeActive, cmeImpactActive, lstmWorker.error, lstmWorker.inferring, lstmWorker.modelStatus, noaaDonki.error, noaaDonki.lastFetch, ovationProvider.health.level, showISS, toDockStatus, wsaEnlilProvider.health.level]);
 
   const dockStatusClass: Record<DockStatus, string> = {
     green: 'bg-emerald-400',
     amber: 'bg-amber-400',
     red: 'bg-red-400',
   };
+  const clampDockAnchor = useCallback((anchor: DockPanelAnchor, side: DockSide, barHeight: number): DockPanelAnchor => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gutter = 8;
+    const panelWidth = Math.min(vw * 0.92, 640);
+    const panelHeight = Math.round(vh * 0.7);
+    const topGutter = barHeight + 8;
+    const maxTop = Math.max(topGutter, vh - panelHeight - gutter);
+    const clampedTop = Math.min(maxTop, Math.max(topGutter, anchor.top));
 
-  useEffect(() => {
-    window.localStorage.setItem('skoll.perfChipPosition', JSON.stringify(perfChipPosition));
-  }, [perfChipPosition]);
+    if (side === 'left') {
+      const rawLeft = anchor.left ?? (anchor.right !== undefined ? vw - panelWidth - anchor.right : gutter);
+      const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
+      return {
+        top: clampedTop,
+        left: Math.min(maxLeft, Math.max(gutter, rawLeft)),
+        right: undefined,
+      };
+    }
+
+    const rawRight = anchor.right ?? (anchor.left !== undefined ? vw - panelWidth - anchor.left : gutter);
+    const maxRight = Math.max(gutter, vw - panelWidth - gutter);
+    return {
+      top: clampedTop,
+      left: undefined,
+      right: Math.min(maxRight, Math.max(gutter, rawRight)),
+    };
+  }, []);
+
+  const clampCommandMenuAnchor = useCallback((anchor: CommandMenuAnchor, barHeight: number): CommandMenuAnchor => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gutter = 8;
+    const panelWidth = Math.min(vw * 0.92, 720);
+    const panelHeight = Math.round(vh * 0.7);
+    const topGutter = barHeight + 8;
+    const maxTop = Math.max(topGutter, vh - panelHeight - gutter);
+    const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
+
+    return {
+      top: Math.min(maxTop, Math.max(topGutter, anchor.top)),
+      left: Math.min(maxLeft, Math.max(gutter, anchor.left)),
+    };
+  }, []);
 
   useEffect(() => {
     const keyHandler = (event: KeyboardEvent) => {
@@ -498,8 +531,9 @@ export default function App() {
 
       if (event.key === 'Escape') {
         setDockModalTileId(null);
-        setDockModalPinned(false);
+        setDockPanelAnchor(null);
         setOpenMenuId(null);
+        setCommandMenuAnchor(null);
         setHoveredDock(null);
         return;
       }
@@ -514,7 +548,10 @@ export default function App() {
         if (!rightTile) return;
         setSelectedTileId(rightTile.id);
         setDockModalSide('right');
-        setDockModalPinned(false);
+        setDockPanelAnchor(clampDockAnchor({
+          top: controlBarHeight + 24,
+          right: 56,
+        }, 'right', controlBarHeight));
         setDockModalTileId((prev) => (prev === rightTile.id ? null : rightTile.id));
         return;
       }
@@ -523,13 +560,16 @@ export default function App() {
       if (!leftTile) return;
       setSelectedTileId(leftTile.id);
       setDockModalSide('left');
-      setDockModalPinned(false);
+      setDockPanelAnchor(clampDockAnchor({
+        top: controlBarHeight + 24,
+        left: 56,
+      }, 'left', controlBarHeight));
       setDockModalTileId((prev) => (prev === leftTile.id ? null : leftTile.id));
     };
 
     window.addEventListener('keydown', keyHandler);
     return () => window.removeEventListener('keydown', keyHandler);
-  }, [leftDockTiles, rightDockTiles]);
+  }, [clampDockAnchor, controlBarHeight, leftDockTiles, rightDockTiles]);
 
   useEffect(() => {
     let frameCount = 0;
@@ -551,6 +591,59 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const id = window.setInterval(() => setNowUtc(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const node = controlBarRef.current;
+    if (!node) {
+      return;
+    }
+
+    const update = () => {
+      const next = Math.max(92, Math.ceil(node.getBoundingClientRect().height));
+      setControlBarHeight((prev) => (prev !== next ? next : prev));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener('resize', update);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [booted]);
+
+  useEffect(() => {
+    const node = timeExplorerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const update = () => {
+      const next = Math.max(TIME_EXPLORER_BASE_HEIGHT, Math.ceil(node.getBoundingClientRect().height));
+      setTimeExplorerHeight((prev) => (prev !== next ? next : prev));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener('resize', update);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [booted, currentDate, isTimePlaying]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--time-explorer-height', `${timeExplorerHeight}px`);
+  }, [timeExplorerHeight]);
+
+  useEffect(() => {
     if (lstmWorker.inferring && inferDispatchRef.current === null) {
       inferDispatchRef.current = performance.now();
     }
@@ -564,6 +657,28 @@ export default function App() {
     () => createHazardTelemetryModel(noaaDonki, lstmWorker, goesFlux, lstmLatencyMs),
     [goesFlux, lstmLatencyMs, lstmWorker, noaaDonki],
   );
+  const telemetryTimeline = useMemo<TelemetryTimelinePoint[]>(() => {
+    const kpSeries = noaaDonki.bundle?.kpSeries ?? [];
+    const points: TelemetryTimelinePoint[] = [];
+    kpSeries.forEach((point) => {
+      const timestamp = Date.parse(point.time);
+      if (!Number.isFinite(timestamp)) {
+        return;
+      }
+      points.push({
+        timestamp,
+        kpIndex: point.kp,
+        bzGsm: noaaDonki.bundle?.bzGsm,
+        solarWindSpeed: noaaDonki.bundle?.speed,
+      });
+    });
+    return points;
+  }, [noaaDonki.bundle]);
+  const aurorEyeSync = useAurorEyeTimelineSync({
+    frames: aurorEyeFrames,
+    telemetryTimeline,
+    maxSkewMs: 1_500,
+  });
 
   const dockSideClass = useMemo(
     () => (dockModalSide === 'left' ? 'left-[calc(var(--dock-width)+1.75rem)]' : 'right-[calc(var(--dock-width)+1.75rem)]'),
@@ -571,7 +686,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!dockModalTileId || dockModalPinned) {
+    if (!dockModalTileId) {
       return;
     }
 
@@ -591,11 +706,59 @@ export default function App() {
       }
 
       setDockModalTileId(null);
+      setDockPanelAnchor(null);
     };
 
     window.addEventListener('mousedown', handleOutsideClick);
     return () => window.removeEventListener('mousedown', handleOutsideClick);
-  }, [dockModalPinned, dockModalTileId]);
+  }, [dockModalTileId]);
+
+  useEffect(() => {
+    if (!dockModalTileId || !dockPanelAnchor) {
+      return;
+    }
+
+    const clampOnResize = () => {
+      setDockPanelAnchor((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const next = clampDockAnchor(prev, dockModalSide, controlBarHeight);
+        const changed =
+          Math.abs(next.top - prev.top) > 2
+          || Math.abs((next.left ?? 0) - (prev.left ?? 0)) > 2
+          || Math.abs((next.right ?? 0) - (prev.right ?? 0)) > 2;
+        return changed ? next : prev;
+      });
+    };
+
+    window.addEventListener('resize', clampOnResize);
+    return () => {
+      window.removeEventListener('resize', clampOnResize);
+    };
+  }, [clampDockAnchor, controlBarHeight, dockModalSide, dockModalTileId, dockPanelAnchor]);
+
+  useEffect(() => {
+    if (!openMenuId || !commandMenuAnchor) {
+      return;
+    }
+
+    const clampOnResize = () => {
+      setCommandMenuAnchor((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const next = clampCommandMenuAnchor(prev, controlBarHeight);
+        const changed = Math.abs(next.top - prev.top) > 2 || Math.abs(next.left - prev.left) > 2;
+        return changed ? next : prev;
+      });
+    };
+
+    window.addEventListener('resize', clampOnResize);
+    return () => {
+      window.removeEventListener('resize', clampOnResize);
+    };
+  }, [clampCommandMenuAnchor, commandMenuAnchor, controlBarHeight, openMenuId]);
 
   const renderSubmenuContent = (tileId: string) => {
     switch (tileId) {
@@ -649,7 +812,11 @@ export default function App() {
       case 'oracle':
         return (
           <Suspense fallback={null}>
-            <LazyOracleModule snapshot={hazardModel} />
+            <LazyOracleModule
+              snapshot={hazardModel}
+              alerts={lstmWorker.forecast?.alerts ?? []}
+              aurorEyeSync={aurorEyeSync.summary}
+            />
           </Suspense>
         );
       case 'diagnostics':
@@ -880,6 +1047,9 @@ export default function App() {
         return (
           <AuroraOvationHUD
             fallbackKp={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 2}
+            providerMode={ovationProvider.health.sourceMode}
+            providerHealth={ovationProvider.health.level}
+            providerDetails={ovationProvider.health.details}
           />
         );
       case 'goes-flux':
@@ -945,18 +1115,6 @@ export default function App() {
     }
   };
 
-  const handleEpochDialChange = (year: number) => {
-    setSelectedEpochYear(year);
-    const anchorDate = currentDate === 'LIVE' ? new Date() : currentDate;
-    const newDate = new Date(anchorDate);
-    newDate.setFullYear(year);
-    setCurrentDate(newDate);
-    if (year === 1859) {
-      setCmeActive(true);
-      setCmeImpactActive(false);
-    }
-  };
-
   const handleSimulatorLaunch = (cme: SyntheticCME) => {
     setSyntheticCME(cme);
     setCmeActive(true);
@@ -988,39 +1146,6 @@ export default function App() {
     }
   };
 
-  // ─── Web Speech API voice command handler ──────────────────────────────────
-  const handleSpeechAction = (action: SpeechAction) => {
-    switch (action.type) {
-      case 'SET_LIVE':
-        setCurrentDate('LIVE');
-        setSelectedEpochYear(2026);
-        break;
-      case 'SET_HISTORICAL':
-        if (currentDate === 'LIVE') setCurrentDate(new Date());
-        break;
-      case 'SET_VIEW':
-        setViewMode(action.view);
-        break;
-      case 'ZOOM_TO':
-        focusOnPlanet(action.planet);
-        break;
-      case 'OPEN_TILE':
-        setSelectedTileId(action.tileId);
-        setOpenMenuId('mission-core');
-        setActiveSubTileId(action.tileId);
-        break;
-      case 'SET_LOCATION': {
-        const preset = LOCATION_PRESETS.find((p) =>
-          p.name.toLowerCase().includes(action.locationName.toLowerCase()),
-        );
-        if (preset) setLocation(preset);
-        break;
-      }
-    }
-  };
-  const { supported: speechSupported, listening: speechListening, lastCommand: speechLastCmd, toggle: toggleSpeech } =
-    useSpeechCommands({ onAction: handleSpeechAction });
-
   // Build FeatureVector for LSTM from live NOAA bundle + telemetry fallback
   useEffect(() => {
     const kpSeries  = noaaDonki.bundle?.kpSeries ?? [];
@@ -1032,6 +1157,9 @@ export default function App() {
     const bz    = noaaDonki.bundle?.bzGsm   ?? -2;
     const bt    = noaaDonki.bundle?.bt      ?? 6;
     const den   = noaaDonki.bundle?.density ?? 5;
+    const totpot = noaaDonki.bundle?.totpot ?? Math.max(0, bt * bt * Math.max(0, -bz) * speed * 0.002);
+    const savncpp = noaaDonki.bundle?.savncpp ?? Math.max(0, 0.42 * Math.max(0, -bz) * den + 0.58 * (noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 2.5));
+    const totusjz = noaaDonki.bundle?.totusjz ?? Math.max(0, bt * Math.max(0, -bz) * 0.7 + den * 0.9);
     const pad   = <T,>(arr: T[], fill: T): T[] => [
       ...Array.from({ length: Math.max(0, 24 - arr.length) }, () => fill),
       ...arr.slice(-24),
@@ -1043,6 +1171,19 @@ export default function App() {
       magneticFieldBz:    pad(Array.from({ length: 24 }, () => bz),    bz),
       kpIndex:            pad(kpArr, kpArr[kpArr.length - 1] ?? 2.5),
       newellCouplingHistory: Array.from({ length: 24 }, () => Math.max(0, -bz) * speed * den * 0.001),
+      alfvenVelocityHistory: Array.from({ length: 24 }, () => speed / Math.sqrt(Math.max(den, 0.25))),
+      totpotHistory: Array.from({ length: 24 }, () => totpot),
+      savncppHistory: Array.from({ length: 24 }, () => savncpp),
+      totusjzHistory: Array.from({ length: 24 }, () => totusjz),
+      syzygyIndex: 0.5,
+      jupiterSaturnAngle: 0.5,
+      solarRotationPhase: ((Date.now() / 86_400_000) % 27.27) / 27.27,
+      solarCyclePhase: 0.58,
+      timeOfYear: (() => {
+        const now = new Date();
+        const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
+        return Math.max(0, Math.min(1, (now.getTime() - start.getTime()) / (365.25 * 86_400_000)));
+      })(),
     } as Parameters<typeof lstmWorker.infer>[0]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noaaDonki.bundle, telemetry.kpIndex, telemetry.windSpeed]);
@@ -1060,6 +1201,51 @@ export default function App() {
   };
 
   const effectiveDate = useMemo(() => (currentDate === 'LIVE' ? new Date() : currentDate), [currentDate]);
+  const sliderWindowMs = 365 * 24 * 60 * 60 * 1000;
+  const sliderMinMs = nowUtc.getTime() - sliderWindowMs;
+  const sliderMaxMs = nowUtc.getTime() + sliderWindowMs;
+  const sliderValueMs = Math.min(sliderMaxMs, Math.max(sliderMinMs, effectiveDate.getTime()));
+
+  const setViewingDate = useCallback((next: Date) => {
+    setCurrentDate(next);
+    setSelectedEpochYear(next.getUTCFullYear());
+  }, []);
+
+  const shiftViewingDate = useCallback((days = 0, months = 0, years = 0) => {
+    setCurrentDate((prev) => {
+      const base = prev === 'LIVE' ? new Date() : new Date(prev);
+      const next = new Date(base);
+      if (years !== 0) {
+        next.setUTCFullYear(next.getUTCFullYear() + years);
+      }
+      if (months !== 0) {
+        next.setUTCMonth(next.getUTCMonth() + months);
+      }
+      if (days !== 0) {
+        next.setUTCDate(next.getUTCDate() + days);
+      }
+      setSelectedEpochYear(next.getUTCFullYear());
+      return next;
+    });
+    setIsTimePlaying(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isTimePlaying) {
+      return;
+    }
+
+    const tick = window.setInterval(() => {
+      setCurrentDate((prev) => {
+        const base = prev === 'LIVE' ? new Date() : new Date(prev);
+        const next = new Date(base.getTime() + 6 * 60 * 60 * 1000);
+        setSelectedEpochYear(next.getUTCFullYear());
+        return next;
+      });
+    }, 250);
+
+    return () => window.clearInterval(tick);
+  }, [isTimePlaying]);
 
   // Check if current date matches a historical event
   const currentHistoricalEvent = useMemo(() => {
@@ -1134,6 +1320,7 @@ export default function App() {
         setCurrentPlanet(null);
         setShowDiagnostics(false);
         setOpenMenuId(null);
+        setCommandMenuAnchor(null);
       }
 
       if (event.key.toLowerCase() === 'r') {
@@ -1188,37 +1375,43 @@ export default function App() {
 
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
 
-  const handlePerfChipPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    const host = event.currentTarget;
-    perfChipDragRef.current.dragging = true;
-    perfChipDragRef.current.offsetX = event.clientX - perfChipPosition.x;
-    perfChipDragRef.current.offsetY = event.clientY - perfChipPosition.y;
-    host.setPointerCapture(event.pointerId);
-  };
+  const envDiagnostics = useMemo(() => {
+    const checks = {
+      nasaApi: Boolean(import.meta.env.VITE_NASA_API_KEY),
+      donkiApi: Boolean(import.meta.env.VITE_NASA_DONKI_API_KEY),
+      fireballProxy: Boolean(import.meta.env.VITE_NASA_FIREBALL_PROXY_URL),
+      openWeather: Boolean(import.meta.env.VITE_OPENWEATHER_API_KEY),
+      mapbox: Boolean(import.meta.env.VITE_MAPBOX_TOKEN),
+    };
 
-  const handlePerfChipPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!perfChipDragRef.current.dragging) {
+    const missingRequired = [
+      !checks.nasaApi ? 'VITE_NASA_API_KEY' : null,
+      !checks.donkiApi ? 'VITE_NASA_DONKI_API_KEY' : null,
+    ].filter((item): item is string => item != null);
+
+    const missingOptional = [
+      !checks.fireballProxy ? 'VITE_NASA_FIREBALL_PROXY_URL' : null,
+      !checks.openWeather ? 'VITE_OPENWEATHER_API_KEY' : null,
+      !checks.mapbox ? 'VITE_MAPBOX_TOKEN' : null,
+    ].filter((item): item is string => item != null);
+
+    const level: 'green' | 'amber' | 'red' = missingRequired.length > 0 ? 'red' : missingOptional.length > 0 ? 'amber' : 'green';
+    return { checks, missingRequired, missingOptional, level };
+  }, []);
+
+  useEffect(() => {
+    if (envWarnedRef.current) {
       return;
     }
+    envWarnedRef.current = true;
 
-    const chipWidth = 230;
-    const chipHeight = 34;
-    const nextX = event.clientX - perfChipDragRef.current.offsetX;
-    const nextY = event.clientY - perfChipDragRef.current.offsetY;
-
-    setPerfChipPosition({
-      x: Math.max(8, Math.min(window.innerWidth - chipWidth, nextX)),
-      y: Math.max(8, Math.min(window.innerHeight - chipHeight, nextY)),
-    });
-  };
-
-  const handlePerfChipPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const host = event.currentTarget;
-    perfChipDragRef.current.dragging = false;
-    if (host.hasPointerCapture(event.pointerId)) {
-      host.releasePointerCapture(event.pointerId);
+    if (envDiagnostics.missingRequired.length > 0) {
+      console.warn('[Sköll] Missing required env keys:', envDiagnostics.missingRequired.join(', '));
     }
-  };
+    if (envDiagnostics.missingOptional.length > 0) {
+      console.warn('[Sköll] Optional env keys/proxy not set:', envDiagnostics.missingOptional.join(', '));
+    }
+  }, [envDiagnostics]);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-mono text-cyan-400">
@@ -1374,13 +1567,82 @@ export default function App() {
         </SlateErrorBoundary>
       </div>
 
-      <div className="fixed inset-0 z-50 pointer-events-none select-none">
+      {booted && (
+        <div
+          ref={controlBarRef}
+          className={[
+            'app-top-bar nasa-slate skoll-slate-shell skoll-command-bar fixed left-0 top-0 z-[9999] w-full pointer-events-auto px-3 py-2 rounded-none',
+            isReversal ? 'skoll-reversal-banner border-red-500/50' : 'border-cyan-500/30',
+          ].join(' ')}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-2">
+            <div className="aurora-command-pill min-w-0 flex items-center gap-2">
+              <span className={`status-dot ${hazardModel.apiHealth}`} aria-hidden="true" />
+              <span className="text-[9px] uppercase tracking-[0.16em] text-cyan-100 truncate">
+                Hazard Kp {hazardModel.kpIndex.toFixed(1)} · Bz {hazardModel.bzGsm.toFixed(1)} nT · {hazardModel.flareClass}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="aurora-command-pill aurora-command-action min-w-0 text-left"
+              onClick={() => {
+                setOpenMenuId((prev) => {
+                  const next = prev === 'live-telemetry' ? null : 'live-telemetry';
+                  if (next === null) {
+                    setCommandMenuAnchor(null);
+                  } else {
+                    setCommandMenuAnchor(clampCommandMenuAnchor({ top: controlBarHeight + 8, left: 12 }, controlBarHeight));
+                    const groupIds = menuGroups['live-telemetry'] ?? [];
+                    if (groupIds.length > 0) {
+                      setActiveSubTileId(groupIds[0]);
+                    }
+                  }
+                  return next;
+                });
+              }}
+            >
+              <span className="text-[8px] uppercase tracking-[0.18em] text-cyan-400/80">Ask Sköll</span>
+              <span className="ml-1 text-[9px] uppercase tracking-[0.1em] text-cyan-100">/ to query live systems</span>
+            </button>
+            <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-2">
+              <MissionUTCTime />
+              <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
+            </div>
+            <div className="aurora-command-pill min-w-0 flex items-center gap-2 justify-start md:justify-end">
+              <div className="h-6 w-6 rounded-md border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
+                <Orbit size={13} />
+              </div>
+              <div className="text-right min-w-0">
+                <div className="text-[8px] uppercase tracking-[0.18em] text-cyan-500/70">Mission</div>
+                <div className="text-[9px] uppercase tracking-[0.1em] text-cyan-100 font-semibold truncate">{selectedTileLabel}</div>
+              </div>
+              <button
+                type="button"
+                title="Reset Sköll — reload all data and restore defaults"
+                onClick={() => window.location.reload()}
+                className="skoll-circle-action ml-1"
+                aria-label="Reset Sköll"
+              >
+                ↻
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="app-interaction-layer fixed inset-x-0 z-50 pointer-events-none select-none overflow-hidden"
+        style={{
+          top: controlBarHeight,
+          bottom: timeExplorerHeight,
+        }}
+      >
         {booted && (
           <>
-            {/* ═══ UNIFIED COMMAND DECK (Side-by-Side) ═══ [cite: 2025-12-11] */}
+            {/* ═══ Side Rails + Overlay Slates ═══ */}
             {!hudMinimized && (
               <>
-                <div className="absolute inset-y-24 left-3 z-40 flex flex-col gap-2 pointer-events-auto">
+                <div className="absolute left-3 z-40 flex flex-col gap-2 pointer-events-auto" style={{ top: 12, bottom: 16 }}>
                   {leftDockTiles.map((item) => (
                     <button
                       key={item.id}
@@ -1396,10 +1658,14 @@ export default function App() {
                         });
                       }}
                       onMouseLeave={() => setHoveredDock(null)}
-                      onClick={() => {
+                      onClick={(event) => {
+                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                        setDockPanelAnchor(clampDockAnchor({
+                          top: rect.bottom + 8,
+                          left: Math.max(12, rect.right + 12),
+                        }, 'left', controlBarHeight));
                         setSelectedTileId(item.id);
                         setDockModalSide('left');
-                        setDockModalPinned(false);
                         setDockModalTileId((prev) => (prev === item.id ? null : item.id));
                       }}
                       className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
@@ -1408,9 +1674,26 @@ export default function App() {
                       {item.icon}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                      setOpenMenuId('all-tools');
+                      setCommandMenuAnchor(clampCommandMenuAnchor({
+                        top: rect.top - 12,
+                        left: rect.right + 12,
+                      }, controlBarHeight));
+                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                    }}
+                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
+                    title="More tools"
+                    aria-label="More tools"
+                  >
+                    ⋯
+                  </button>
                 </div>
 
-                <div className="absolute inset-y-24 right-3 z-40 flex flex-col gap-2 pointer-events-auto">
+                <div className="absolute right-3 z-40 flex flex-col gap-2 pointer-events-auto" style={{ top: 12, bottom: 16 }}>
                   {rightDockTiles.map((item) => (
                     <button
                       key={item.id}
@@ -1426,10 +1709,14 @@ export default function App() {
                         });
                       }}
                       onMouseLeave={() => setHoveredDock(null)}
-                      onClick={() => {
+                      onClick={(event) => {
+                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                        setDockPanelAnchor(clampDockAnchor({
+                          top: rect.bottom + 8,
+                          right: Math.max(12, window.innerWidth - rect.left + 12),
+                        }, 'right', controlBarHeight));
                         setSelectedTileId(item.id);
                         setDockModalSide('right');
-                        setDockModalPinned(false);
                         setDockModalTileId((prev) => (prev === item.id ? null : item.id));
                       }}
                       className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
@@ -1438,6 +1725,23 @@ export default function App() {
                       {item.icon}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                      setOpenMenuId('all-tools');
+                      setCommandMenuAnchor(clampCommandMenuAnchor({
+                        top: rect.top - 12,
+                        left: rect.left - 360,
+                      }, controlBarHeight));
+                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                    }}
+                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
+                    title="More tools"
+                    aria-label="More tools"
+                  >
+                    ⋯
+                  </button>
                 </div>
 
                 {hoveredDock && (
@@ -1455,46 +1759,57 @@ export default function App() {
                   </div>
                 )}
 
-                {dockModalTileId && (
-                  <motion.div
-                    ref={dockPanelRef}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className={`nasa-slate fixed top-28 z-50 w-[min(90vw,38rem)] max-w-xl p-3 pointer-events-auto ${dockSideClass}`}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                        {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="px-1 text-[8px] uppercase tracking-[0.14em] text-cyan-400/70">
-                          {dockModalSide === 'left' ? 'Left Rail' : 'Right Rail'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setDockModalPinned((prev) => !prev)}
-                          className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.14em] ${dockModalPinned ? 'border-amber-300 text-amber-100 bg-amber-500/10' : 'border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10'}`}
-                        >
-                          {dockModalPinned ? 'Pinned' : 'Pin'}
-                        </button>
+                {dockModalTileId && createPortal(
+                  <>
+                    <div
+                      className="fixed inset-0 z-40 bg-black/10 pointer-events-auto"
+                      onClick={() => {
+                        setDockModalTileId(null);
+                        setDockPanelAnchor(null);
+                      }}
+                    />
+                    <motion.div
+                      ref={dockPanelRef}
+                      initial={{ opacity: 0, x: dockModalSide === 'left' ? -16 : 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: dockModalSide === 'left' ? -16 : 16 }}
+                      transition={{ duration: 0.2, ease: 'easeOut' }}
+                      className={`nasa-slate skoll-slate-shell skoll-floating-popover fixed top-[7rem] z-50 w-[min(92vw,40rem)] max-w-[42rem] p-3 pointer-events-auto ${dockSideClass}`}
+                      style={dockPanelAnchor
+                        ? dockModalSide === 'left'
+                          ? {
+                              top: dockPanelAnchor.top,
+                              left: dockPanelAnchor.left,
+                            }
+                          : {
+                              top: dockPanelAnchor.top,
+                              right: dockPanelAnchor.right,
+                            }
+                        : undefined}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
+                        <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
+                          {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
-                            setDockModalPinned(false);
                             setDockModalTileId(null);
+                            setDockPanelAnchor(null);
                           }}
-                          className="h-6 px-2 rounded border border-cyan-500/30 text-[8px] uppercase tracking-[0.14em] text-cyan-200 hover:bg-cyan-500/10"
+                          className="skoll-circle-action skoll-circle-action-danger"
+                          aria-label="Close panel"
+                          title="Close"
                         >
-                          Close
+                          ✕
                         </button>
                       </div>
-                    </div>
-                    <div className="max-h-[68vh] overflow-y-auto wolf-scroll pr-1">
-                      {renderSubmenuContent(dockModalTileId)}
-                    </div>
-                  </motion.div>
+                      <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
+                        {renderSubmenuContent(dockModalTileId)}
+                      </div>
+                    </motion.div>
+                  </>,
+                  document.body,
                 )}
               </>
             )}
@@ -1505,193 +1820,219 @@ export default function App() {
             <MagneticReversalAlert active={selectedEpochYear <= -66000000} />
 
             {viewMode === 'SURFACE' && (
-              <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 top-12 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100">Exit Landing</button>
+              <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ top: 12 }}>Exit Landing</button>
             )}
-
-            <div className={[
-              'nasa-slate skoll-command-bar fixed left-1/2 -translate-x-1/2 top-3 z-[98] w-[min(98vw,1100px)] pointer-events-auto px-2.5 sm:px-3 py-2 rounded-xl',
-              isReversal ? 'skoll-reversal-banner border-red-500/50' : 'border-cyan-500/30',
-            ].join(' ')}>
-              <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_auto] items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
-                    <Orbit size={15} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[7px] sm:text-[8px] uppercase tracking-[0.18em] text-cyan-500/70">Control</div>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.1em] text-cyan-100 font-semibold truncate">{selectedTileLabel}</div>
-                      <MissionUTCTime />
-                    </div>
-                    <div className="text-[7px] sm:text-[8px] uppercase tracking-[0.08em] text-cyan-400/70 truncate">{trackedPlanetName ? `Tracking ${trackedPlanetName}` : 'Mission Core'}</div>
-                  </div>
-                </div>
-
-                <div className="min-w-0 flex items-center gap-1.5 sm:gap-2">
-                  <label htmlFor="epoch-dial" className="text-[7px] sm:text-[8px] uppercase tracking-[0.18em] text-cyan-500/70 shrink-0">Epoch</label>
-                  <input
-                    id="epoch-dial"
-                    type="range"
-                    min={1859}
-                    max={2100}
-                    value={selectedEpochYear}
-                    onChange={(event) => handleEpochDialChange(Number(event.target.value))}
-                    className="w-full accent-cyan-400"
-                  />
-                  <div className="text-[9px] sm:text-[10px] font-semibold tabular-nums text-cyan-100 w-11 sm:w-12 text-right">{selectedEpochYear}</div>
-                  {/* Temporal Reset — snaps epoch back to current calendar year */}
-                  <button
-                    type="button"
-                    title="Reset to current year (Date.now)"
-                    onClick={() => setSelectedEpochYear(new Date().getFullYear())}
-                    className="shrink-0 h-6 px-1.5 rounded border border-cyan-500/40 hover:border-cyan-300 hover:bg-cyan-500/10 text-cyan-400 hover:text-cyan-200 transition-colors flex items-center gap-0.5"
-                    style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
-                  >
-                    ↺ Now
-                  </button>
-                  {/* Master Reset — clears all active simulations */}
-                  <button
-                    type="button"
-                    title="Master Reset — clear all active simulations"
-                    onClick={handleMasterReset}
-                    className="shrink-0 h-6 px-1.5 rounded border border-red-500/40 hover:border-red-300 hover:bg-red-500/10 text-red-400 hover:text-red-200 transition-colors flex items-center gap-0.5"
-                    style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
-                  >
-                    ⊘ Reset
-                  </button>
-                </div>
-
-                {/* Location switcher */}
-                <div className="flex items-center">
-                  <LocationSwitcher value={location} onChange={setLocation} />
-                </div>
-
-                <div className="flex items-center gap-1.5 sm:gap-2 justify-start lg:justify-end flex-nowrap overflow-x-auto wolf-scroll min-w-0">
-                  {quickActions.map((action) => (
-                    <button
-                      key={action.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTileId(action.id);
-                        setHiddenTileIds((prev) => prev.filter((id) => id !== action.id));
-                        setOpenMenuId((prev) => (prev === action.id ? null : action.id));
-                        const groupIds = menuGroups[action.id] ?? [];
-                        if (groupIds.length > 0) {
-                          setActiveSubTileId(groupIds[0]);
-                        }
-                      }}
-                      className={`h-7 sm:h-8 w-9 sm:w-10 rounded-md border text-cyan-100 flex items-center justify-center transition-colors ${openMenuId === action.id ? 'border-cyan-300 bg-cyan-500/15' : 'border-cyan-500/40 hover:bg-cyan-500/10'}`}
-                      title={action.label}
-                    >
-                      <action.icon size={13} />
-                    </button>
-                  ))}
-                  {trackedPlanetName && (
-                    <button type="button" onClick={() => setTrackedPlanetName(null)} className="h-7 sm:h-8 px-2 rounded-md border border-amber-400/40 text-[8px] uppercase tracking-[0.14em] text-amber-100 hover:bg-amber-500/10">Stop</button>
-                  )}
-                  {/* Voice command toggle */}
-                  {speechSupported && (
-                    <button
-                      type="button"
-                      onClick={toggleSpeech}
-                      title={speechListening ? 'Stop voice commands' : 'Enable voice commands'}
-                      className={`h-7 sm:h-8 w-9 sm:w-10 rounded-md border flex items-center justify-center transition-colors ${
-                        speechListening
-                          ? 'border-red-400/60 bg-red-500/15 text-red-300 animate-pulse'
-                          : 'border-cyan-500/40 text-cyan-500/60 hover:bg-cyan-500/10'
-                      }`}
-                    >
-                      {speechListening ? <MicOff size={13} /> : <Mic size={13} />}
-                    </button>
-                  )}
-                  {/* Solar flare audio toggle */}
-                  <button
-                    type="button"
-                    onClick={toggleFlareAudio}
-                    title={flareAudioEnabled ? 'Mute solar audio' : 'Enable solar audio'}
-                    className={`h-7 sm:h-8 px-2 rounded-md border text-[8px] uppercase tracking-[0.12em] transition-colors ${
-                      flareAudioEnabled
-                        ? 'border-amber-400/60 bg-amber-500/10 text-amber-300'
-                        : 'border-cyan-500/40 text-cyan-500/60 hover:bg-cyan-500/10'
-                    }`}
-                  >
-                    {flareAudioEnabled ? '🔊' : '🔇'}
-                  </button>
-                  {/* Speech command HUD */}
-                  {speechLastCmd && (
-                    <div className="h-7 sm:h-8 px-2 rounded-md border border-green-400/40 bg-green-500/10 flex items-center text-[8px] uppercase tracking-[0.14em] text-green-300 font-mono">
-                      ✓ {speechLastCmd}
-                    </div>
-                  )}
-                  <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
-                </div>
-              </div>
-
-              <AnimatePresence initial={false}>
-                {openMenuId && (
-                  <motion.div
-                    key={openMenuId}
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="nasa-slate fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-auto w-[min(92vw,720px)] min-w-[320px] sm:min-w-[420px] p-2"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex-1 overflow-x-auto wolf-scroll">
-                        <div className="flex items-center gap-1.5 min-w-max pr-1">
-                          {(menuGroups[openMenuId] ?? []).map((tileId) => (
-                            <button
-                              key={tileId}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTileId(tileId);
-                                setActiveSubTileId(tileId);
-                              }}
-                              className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.14em] whitespace-nowrap ${activeSubTileId === tileId ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300/90 hover:bg-cyan-500/10'}`}
-                            >
-                              {tileCatalog.find((tile) => tile.id === tileId)?.label ?? tileId}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setOpenMenuId(null)}
-                        className="h-6 px-2 rounded border border-cyan-500/30 text-[8px] uppercase tracking-[0.14em] text-cyan-200 hover:bg-cyan-500/10 shrink-0"
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <div className="max-h-[34vh] overflow-y-auto wolf-scroll pr-1">
-                        {renderSubmenuContent(activeSubTileId)}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-
-              <div
-                className="fixed z-[99] pointer-events-auto select-none"
-                style={{ transform: `translate(${perfChipPosition.x}px, ${perfChipPosition.y}px)` }}
-                onPointerDown={handlePerfChipPointerDown}
-                onPointerMove={handlePerfChipPointerMove}
-                onPointerUp={handlePerfChipPointerUp}
-              >
-                <div className="rounded-md border border-cyan-500/35 bg-black/50 px-2 py-1 backdrop-blur-md text-[8px] uppercase tracking-[0.08em] text-cyan-200 font-mono cursor-grab active:cursor-grabbing">
-                  <span className="telemetry-value">FPS {fps}</span>
-                  <span className="mx-1 text-cyan-500/40">|</span>
-                  <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
-                  <span className="mx-1 text-cyan-500/40">|</span>
-                  <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
-                </div>
-              </div>
-
-
-            </div>
           </>
         )}
       </div>
+
+      {booted && (
+        <>
+          <AnimatePresence initial={false}>
+            {openMenuId && createPortal(
+              <motion.div
+                ref={commandMenuRef}
+                key={openMenuId}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="nasa-slate skoll-slate-shell skoll-floating-popover fixed z-[110] pointer-events-auto w-[min(92vw,720px)] min-w-[320px] sm:min-w-[420px] p-2"
+                style={commandMenuAnchor
+                  ? {
+                      top: commandMenuAnchor.top,
+                      left: commandMenuAnchor.left,
+                    }
+                  : {
+                      top: controlBarHeight + 8,
+                      left: 16,
+                    }}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex-1 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'live-telemetry', label: 'Live Telemetry' },
+                        { id: 'ml-forecasts', label: 'ML Forecasts' },
+                        { id: 'simulations', label: 'Simulations' },
+                        { id: 'all-tools', label: 'All Tools' },
+                      ].map((group) => (
+                        <button
+                          key={group.id}
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(group.id);
+                            const groupIds = menuGroups[group.id] ?? [];
+                            if (groupIds.length > 0) {
+                              setActiveSubTileId(groupIds[0]);
+                            }
+                          }}
+                          className={`rounded-md border px-2 py-1.5 text-left ${openMenuId === group.id ? 'border-cyan-300 bg-cyan-500/10' : 'border-cyan-500/25 bg-black/20 hover:bg-cyan-500/5'}`}
+                        >
+                          <div className="text-[8px] uppercase tracking-[0.18em] text-cyan-500/70">Category</div>
+                          <div className="text-[9px] uppercase tracking-[0.1em] text-cyan-100">{group.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1 max-h-[22vh] overflow-y-auto wolf-scroll">
+                      {(menuGroups[openMenuId] ?? []).map((tileId) => (
+                        <button
+                          key={tileId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTileId(tileId);
+                            setActiveSubTileId(tileId);
+                          }}
+                          className={`h-9 px-2 rounded border text-[8px] uppercase tracking-[0.14em] text-left ${activeSubTileId === tileId ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300/90 hover:bg-cyan-500/10'}`}
+                        >
+                          <span className="line-clamp-2">{tileCatalog.find((tile) => tile.id === tileId)?.label ?? tileId}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setCommandMenuAnchor(null);
+                    }}
+                    className="skoll-circle-action skoll-circle-action-danger shrink-0"
+                    aria-label="Close menu"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="max-h-[34vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
+                    {renderSubmenuContent(activeSubTileId)}
+                </div>
+              </motion.div>,
+              document.body,
+            )}
+          </AnimatePresence>
+
+          <div className="fixed bottom-[calc(var(--time-explorer-height)+0.5rem)] right-3 sm:right-4 z-[99] pointer-events-auto select-none">
+            <div className="rounded-md border border-cyan-500/35 bg-black/50 px-2 py-1 backdrop-blur-md text-[8px] uppercase tracking-[0.08em] text-cyan-200 font-mono">
+              <span className="telemetry-value">FPS {fps}</span>
+              <span className="mx-1 text-cyan-500/40">|</span>
+              <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
+              <span className="mx-1 text-cyan-500/40">|</span>
+              <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
+            </div>
+          </div>
+
+          <div
+            ref={timeExplorerRef}
+            className="time-explorer fixed inset-x-0 bottom-0 z-[9998] pointer-events-auto"
+          >
+            <div className="mx-auto max-w-[1280px] px-4 py-2.5 flex flex-col gap-2">
+              <div className="flex items-center justify-center gap-1.5">
+                {[
+                  { label: '◄◄1Y', action: () => shiftViewingDate(0, 0, -1) },
+                  { label: '◄◄6M', action: () => shiftViewingDate(0, -6, 0) },
+                  { label: '◄◄1M', action: () => shiftViewingDate(0, -1, 0) },
+                  { label: '◄◄15D', action: () => shiftViewingDate(-15, 0, 0) },
+                  { label: '◄◄5D', action: () => shiftViewingDate(-5, 0, 0) },
+                ].map((control) => (
+                  <button
+                    key={control.label}
+                    type="button"
+                    onClick={control.action}
+                    className="time-jump-btn"
+                  >
+                    {control.label}
+                  </button>
+                ))}
+                <button type="button" onClick={() => shiftViewingDate(-1, 0, 0)} className="time-jump-btn">◄</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTimePlaying((prev) => !prev);
+                    if (currentDate === 'LIVE') {
+                      setViewingDate(new Date());
+                    }
+                  }}
+                  className="time-jump-btn time-jump-btn-primary"
+                >
+                  {isTimePlaying ? '❚❚' : '▶'}
+                </button>
+                <button type="button" onClick={() => shiftViewingDate(1, 0, 0)} className="time-jump-btn">►</button>
+                {[
+                  { label: '5D►►', action: () => shiftViewingDate(5, 0, 0) },
+                  { label: '15D►►', action: () => shiftViewingDate(15, 0, 0) },
+                  { label: '1M►►', action: () => shiftViewingDate(0, 1, 0) },
+                  { label: '6M►►', action: () => shiftViewingDate(0, 6, 0) },
+                  { label: '1Y►►', action: () => shiftViewingDate(0, 0, 1) },
+                ].map((control) => (
+                  <button
+                    key={control.label}
+                    type="button"
+                    onClick={control.action}
+                    className="time-jump-btn"
+                  >
+                    {control.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="px-1">
+                <input
+                  type="range"
+                  className="time-explorer-slider"
+                  min={sliderMinMs}
+                  max={sliderMaxMs}
+                  step={60_000}
+                  value={sliderValueMs}
+                  onChange={(event) => {
+                    setIsTimePlaying(false);
+                    setViewingDate(new Date(Number(event.currentTarget.value)));
+                  }}
+                  aria-label="Time explorer slider"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 text-[9px] uppercase tracking-[0.1em] text-cyan-100">
+                  <span className="text-cyan-500/70 mr-2 tracking-[0.18em] text-[8px]">Time Explorer</span>
+                  {currentDate === 'LIVE'
+                    ? <span className="inline-flex items-center gap-1.5"><span className="time-live-dot" />VIEWING LIVE</span>
+                    : `Viewing: ${effectiveDate.toISOString().slice(0, 19).replace('T', ' ')} UTC`}
+                </div>
+                <div className="text-[9px] uppercase tracking-[0.1em] text-cyan-100 whitespace-nowrap">
+                  <span className="text-cyan-500/70 mr-2 tracking-[0.18em] text-[8px]">Now:</span>
+                  {nowUtc.toISOString().slice(0, 19).replace('T', ' ')} UTC
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTimePlaying(false);
+                    setCurrentDate('LIVE');
+                    setSelectedEpochYear(new Date().getFullYear());
+                  }}
+                  className="time-jump-btn"
+                >
+                  NOW
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTimePlaying(false);
+                    handleMasterReset();
+                    setCurrentDate('LIVE');
+                    setSelectedEpochYear(new Date().getFullYear());
+                  }}
+                  className="time-jump-btn"
+                >
+                  RESET
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {!booted && (
         <div className="fixed inset-0 z-[110] pointer-events-auto">

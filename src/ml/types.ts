@@ -171,6 +171,9 @@ export interface FeatureVector {
   // Secondary/Derived features (Keep these for HUD metadata/logic)
   newellCouplingHistory: number[];
   alfvenVelocityHistory: number[];
+  totpotHistory: number[];
+  savncppHistory: number[];
+  totusjzHistory: number[];
   
   // Planetary alignment features (current snapshot)
   syzygyIndex: number;           // 0-1

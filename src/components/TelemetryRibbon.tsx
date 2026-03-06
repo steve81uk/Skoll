@@ -214,11 +214,11 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
   }
 
   return (
-    <div className="fixed top-0 left-0 z-[60] w-full h-7 bg-gradient-to-b from-black/60 via-black/40 to-transparent backdrop-blur-lg backdrop-saturate-150 border-b border-cyan-400/15 px-3 flex items-center justify-between text-[7px] uppercase tracking-[0.2em] font-mono text-cyan-300 shadow-[0_2px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(34,211,238,0.08)]">
+    <div className="fixed top-0 left-0 z-[60] w-full min-h-7 sm:h-7 bg-gradient-to-b from-black/60 via-black/40 to-transparent backdrop-blur-lg backdrop-saturate-150 border-b border-cyan-400/15 px-2.5 sm:px-3 py-1 sm:py-0 flex items-center justify-between text-[7px] uppercase tracking-[0.18em] sm:tracking-[0.2em] font-mono text-cyan-300 shadow-[0_2px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(34,211,238,0.08)] gap-2">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/15 to-transparent" />
 
       {/* Left: MET + KP */}
-      <div className="flex items-center gap-3 tabular-nums whitespace-nowrap relative z-10 w-[34%] min-w-0">
+      <div className="flex items-center gap-1.5 sm:gap-3 tabular-nums whitespace-nowrap relative z-10 w-[50%] md:w-[34%] min-w-0 overflow-hidden">
         <span className="text-cyan-500/80">MET</span>
         <span className="text-cyan-100 font-semibold live-clock">{formatMET(data.metSeconds ?? 0)}</span>
         <span className="text-cyan-400/30">│</span>
@@ -232,14 +232,14 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
       </div>
 
       {/* Centre: contextual */}
-      <div className="flex items-center justify-center gap-2 tabular-nums whitespace-nowrap relative z-10 w-[32%] min-w-0">
+      <div className="hidden md:flex items-center justify-center gap-2 tabular-nums whitespace-nowrap relative z-10 w-[32%] min-w-0">
         <span className="text-cyan-500/80">{centreLabel}</span>
         <span className="font-semibold telemetry-value" style={{ color: centreColor }}>{centreValue}</span>
       </div>
 
       {/* Right: location + aurora + solar wind */}
-      <div className="flex items-center justify-end gap-2 whitespace-nowrap relative z-10 w-[34%] min-w-0">
-        <span className="text-cyan-500/60">{loc.name.split(',')[0].toUpperCase()}</span>
+      <div className="flex items-center justify-end gap-1.5 sm:gap-2 whitespace-nowrap relative z-10 w-[50%] md:w-[34%] min-w-0 overflow-hidden">
+        <span className="text-cyan-500/60 truncate max-w-[9ch] sm:max-w-[14ch]">{loc.name.split(',')[0].toUpperCase()}</span>
         <span
           className="rounded px-1 py-px text-[7px]"
           style={{
@@ -254,7 +254,7 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
         {bundle?.solarWindSpeed != null && (
           <>
             <span className="text-cyan-400/30">│</span>
-            <span className="text-cyan-500/80">SW</span>
+            <span className="text-cyan-500/80 hidden sm:inline">SW</span>
             <span className="text-orange-300 font-semibold telemetry-value">{bundle.solarWindSpeed.toFixed(0)} km/s</span>
           </>
         )}

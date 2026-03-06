@@ -57,7 +57,7 @@ export const StatusPip: FC<StatusPipProps> = ({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onClick={handleClick}
-      className={`group relative flex items-center justify-center w-7 h-7 rounded border border-cyan-500/25 bg-gradient-to-br from-black/40 to-black/20 backdrop-blur-lg backdrop-saturate-150 transition-all duration-200 hover:border-cyan-400/50 hover:scale-105 hover:shadow-[0_0_12px_rgba(34,211,238,0.15)] ${flickerClass} ${
+      className={`group relative flex items-center justify-center w-7 h-7 rounded border border-cyan-500/25 bg-gradient-to-br from-black/40 to-black/20 backdrop-blur-lg backdrop-saturate-150 transition-all duration-200 hover:border-cyan-400/50 hover:-mt-0.5 hover:mb-0.5 hover:shadow-[0_0_12px_rgba(34,211,238,0.15)] ${flickerClass} ${
         isActive ? 'shadow-[0_0_10px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(34,211,238,0.15)]' : ''
       }`}
       aria-label={`${label} status pip`}

@@ -34,6 +34,9 @@ interface KpPoint {
 export interface AuroraOvationProps {
   /** Fallback Kp (0–9) when live fetch unavailable */
   fallbackKp?: number;
+  providerMode?: 'l1-live' | 'kp-fallback' | 'degraded' | 'offline';
+  providerHealth?: 'green' | 'amber' | 'red';
+  providerDetails?: string;
 }
 
 const ACCENT   = '#22ff88';
@@ -66,7 +69,12 @@ function kpToColor(kp: number): string {
   return '#e040fb';                  // pink/purple — G4+
 }
 
-export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps) {
+export default function AuroraOvationHUD({
+  fallbackKp = 2,
+  providerMode = 'degraded',
+  providerHealth = 'amber',
+  providerDetails,
+}: AuroraOvationProps) {
   const [kp, setKp]               = useState<number>(fallbackKp);
   const [hpiNorth, setHpiNorth]   = useState<number | undefined>(undefined);
   const [hpiSouth, setHpiSouth]   = useState<number | undefined>(undefined);
@@ -128,6 +136,14 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
   const visLat    = kpToVisibleLat(kp);
   const stormCol  = kpToColor(kp);
   const activity  = activityLabel((hpiNorth ?? 0) + (hpiSouth ?? 0));
+  const providerColor = providerHealth === 'green' ? '#22ff88' : providerHealth === 'amber' ? '#ffdd44' : '#ff4f52';
+  const providerModeLabel = providerMode === 'l1-live'
+    ? 'L1 LIVE'
+    : providerMode === 'kp-fallback'
+      ? 'KP FALLBACK'
+      : providerMode === 'offline'
+        ? 'OFFLINE'
+        : 'DEGRADED';
 
   // Polar oval visualisation — a simple SVG hemisphere diagram
   // The auroral oval is drawn as an ellipse at the polar latitude.
@@ -159,6 +175,9 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: stormCol, display: 'inline-block', boxShadow: `0 0 6px ${stormCol}` }} />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>OVATION Prime</span>
+        <span style={{ fontSize: '7px', letterSpacing: '0.12em', textTransform: 'uppercase', color: providerColor, border: `1px solid ${providerColor}66`, borderRadius: '4px', padding: '1px 4px' }}>
+          {providerModeLabel}
+        </span>
         <span className="live-clock" style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', letterSpacing: '0.1em', minInlineSize: '12ch' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC` : 'Pending'}
         </span>
@@ -201,6 +220,11 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
             <span style={{ color: stormCol, fontWeight: 'bold' }}>{activity}</span>
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
+            <span style={{ opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Driver</span>
+            <span style={{ color: providerColor, fontWeight: 'bold' }}>{providerModeLabel}</span>
+          </div>
+
           {/* Visibility */}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
             <span style={{ opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Visible south of</span>
@@ -239,6 +263,11 @@ export default function AuroraOvationHUD({ fallbackKp = 2 }: AuroraOvationProps)
       {error && (
         <div style={{ padding: '4px 10px 6px', fontSize: '7px', opacity: 0.4, borderBlockStart: '1px solid rgba(255,255,255,0.05)', color: '#ff8c42' }}>
           ⚠ {error}
+        </div>
+      )}
+      {!error && providerDetails && (
+        <div style={{ padding: '4px 10px 6px', fontSize: '7px', opacity: 0.45, borderBlockStart: '1px solid rgba(255,255,255,0.05)', color: providerColor }}>
+          {providerDetails}
         </div>
       )}
     </div>

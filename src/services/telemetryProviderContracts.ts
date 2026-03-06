@@ -1,7 +1,13 @@
 import type { HazardTelemetryModel } from './hazardModel';
 
+export type ProviderHealthLevel = 'green' | 'amber' | 'red';
+export type ProviderSourceMode = 'l1-live' | 'kp-fallback' | 'degraded' | 'offline';
+
 export interface ProviderHealth {
   ok: boolean;
+  level?: ProviderHealthLevel;
+  sourceMode?: ProviderSourceMode;
+  lastUpdated?: string;
   latencyMs?: number;
   details?: string;
 }

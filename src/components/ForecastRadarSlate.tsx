@@ -5,7 +5,7 @@
  * All values are derived live from the GlobalTelemetry hook via props.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { FC } from 'react';
 import { calculateExoTelemetry, SYSTEM_CONSTANTS } from '../ml/ExoPhysics';
 import { CosmicTooltip } from './CosmicTooltip';
@@ -17,14 +17,6 @@ const RADAR_COSMIC: Record<string, TooltipContent> = {
   WIND: { title: 'Solar Wind Speed',      description: 'How fast charged particles from the Sun are streaming past Earth (km/s). Fast wind compresses our magnetic shield and fuels auroras.',               accentColor: '#44bbff' },
   CME:  { title: 'CME Plasma Pressure',   description: 'A Coronal Mass Ejection is a giant cloud of solar plasma. High pressure squeezes Earth\'s magnetosphere closer to the planet — satellites in danger.',  accentColor: '#ff8844' },
   AUR:  { title: 'Aurora Intensity',      description: 'Energetic particle precipitation driving current auroral displays. At high levels the Northern Lights can be seen as far south as the mid-latitudes.',     accentColor: '#cc44ff' },
-};
-
-// ─── Tooltip definitions ──────────────────────────────────────────────────────
-const RADAR_TOOLTIPS: Record<string, { title: string; desc: string }> = {
-  KP:   { title: 'Magnetic Storm Danger',       desc: 'The K-index (0–9) measures disturbances in Earth\'s magnetic field. Above 5 means storm conditions that can disrupt GPS, satellites, and power grids.' },
-  WIND: { title: 'Solar Wind Speed',            desc: 'How fast charged particles from the Sun are streaming past Earth (km/s). Fast wind compresses our magnetic shield and fuels auroras.' },
-  CME:  { title: 'Solar Plasma Pressure',       desc: 'A Coronal Mass Ejection is a giant cloud of solar plasma. High pressure means it\'s squeezing Earth\'s magnetic bubble closer to the planet.' },
-  AUR:  { title: 'Aurora Intensity',            desc: 'How energetic the current aurora display is. At high levels the Northern Lights can be seen as far south as the mid-latitudes.' },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -96,12 +88,9 @@ const AxisBlip: FC<{ angleDeg: number; value: number; label: string }> = ({
   const [px, py] = polarPoint(angleDeg, value);
   const [lx, ly] = polarPoint(angleDeg, 1.22);
   const color = threatColor(value);
-  const tip = RADAR_TOOLTIPS[label];
 
   return (
     <g>
-      {/* Native browser tooltip for the SVG label area */}
-      {tip && <title>{tip.title}: {tip.desc}</title>}
       {/* Outer ping ring */}
       <circle cx={px} cy={py} r="5" fill="none" stroke={color} strokeWidth="0.8" opacity="0.5">
         <animate attributeName="r" values="3;8;3" dur="2.4s" repeatCount="indefinite" />
@@ -176,16 +165,6 @@ export const ForecastRadarSlate: FC<ForecastRadarProps> = ({
   const overallThreat = (kpNorm + windNorm + cmeDisplay + auroraIntensity) / 4;
   const polygonPts = buildPolygon(kpNorm, windNorm, cmeDisplay, auroraIntensity);
   const polyColor = threatColor(overallThreat);
-
-  // Active tooltip key — null means no tooltip shown
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const activeTooltip = hoveredKey ? RADAR_TOOLTIPS[hoveredKey] : null;
-  const activeNorm =
-    hoveredKey === 'KP'   ? kpNorm
-    : hoveredKey === 'WIND' ? windNorm
-    : hoveredKey === 'CME'  ? cmeDisplay
-    : hoveredKey === 'AUR'  ? auroraIntensity
-    : 0;
 
   // Inject keyframe once
   const styleInjected = useRef(false);
@@ -358,32 +337,8 @@ export const ForecastRadarSlate: FC<ForecastRadarProps> = ({
         </svg>
       </div>
 
-      {/* ── Numeric readouts + single mounted tooltip ── */}
+      {/* ── Numeric readouts (global CosmicTooltip only) ── */}
       <div className="relative px-2 pb-3">
-        {/* Single glassmorphism tooltip — only mounts when a cell is hovered */}
-        {activeTooltip && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-52 pointer-events-none">
-            <div className="relative rounded-xl border border-cyan-400/25 bg-black/85 backdrop-blur-xl px-3 py-2.5 shadow-[0_4px_28px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(34,211,238,0.10)] text-left">
-              {/* Top shine */}
-              <div className="absolute inset-x-0 top-0 h-px rounded-t-xl bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
-              <div
-                className="text-xs font-bold uppercase tracking-[0.14em] mb-1"
-                style={{ color: threatColor(activeNorm) }}
-              >
-                {activeTooltip.title}
-              </div>
-              <div className="text-xs leading-[1.55] font-mono text-cyan-200/85">
-                {activeTooltip.desc}
-              </div>
-              {/* Downward caret */}
-              <div
-                className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2.5 h-1.5 opacity-50"
-                style={{ background: 'rgba(34,211,238,0.4)', clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)' }}
-              />
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-4 gap-0.5 text-center">
           {[
             { label: 'KP',   raw: kpIndex.toFixed(1),                       norm: kpNorm,         tipKey: 'KP'   },
@@ -394,13 +349,11 @@ export const ForecastRadarSlate: FC<ForecastRadarProps> = ({
             <CosmicTooltip key={label} content={RADAR_COSMIC[tipKey]}>
               <div
                 className="rounded border bg-black/30 px-1 py-1 cursor-default select-none"
-                style={{ borderColor: hoveredKey === tipKey ? `${threatColor(norm)}66` : `${threatColor(norm)}22` }}
-                onMouseEnter={() => setHoveredKey(tipKey)}
-                onMouseLeave={() => setHoveredKey(null)}
+                style={{ borderColor: `${threatColor(norm)}44` }}
               >
                 <div
                   className="text-xs uppercase tracking-[0.14em] font-mono"
-                  style={{ color: hoveredKey === tipKey ? 'rgba(148,216,248,0.95)' : 'rgba(148,216,248,0.65)' }}
+                  style={{ color: 'rgba(148,216,248,0.85)' }}
                 >
                   {label}
                 </div>

@@ -18,8 +18,8 @@
  *   Wind plasma 2h: https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json
  *   OVATION aurora: https://services.swpc.noaa.gov/json/ovation_aurora_latest.json
  *
- * NASA DONKI (api_key=DEMO_KEY for demo; replace with real key):
- *   CME Analysis:   https://api.nasa.gov/DONKI/CMEAnalysis?api_key=DEMO_KEY&speed=0&halfAngle=0&catalog=ALL&keyword=NONE
+ * NASA DONKI (api_key from VITE_NASA_DONKI_API_KEY, fallback DEMO_KEY):
+ *   CME Analysis:   https://api.nasa.gov/DONKI/CMEAnalysis?api_key=<KEY>&speed=0&halfAngle=0&catalog=ALL&keyword=NONE
  */
 
 import { fetchJSONWithPolicy } from './fetchPolicy';
@@ -51,6 +51,9 @@ export interface NOAABundle {
   density:      number;
   bt:           number;
   bzGsm:        number;
+  totpot?:      number;
+  savncpp?:     number;
+  totusjz?:     number;
   kpSeries:     KPPoint[];
   cmeEvents:    CMEEvent[];
   auroraActive: boolean;
@@ -59,7 +62,7 @@ export interface NOAABundle {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const SWPC  = 'https://services.swpc.noaa.gov';
 const DONKI = 'https://api.nasa.gov/DONKI';
-const DEMO  = 'DEMO_KEY';
+const NASA_DONKI_KEY = import.meta.env.VITE_NASA_DONKI_API_KEY || 'DEMO_KEY';
 
 async function fetchJSON<T>(url: string, validator?: (value: unknown) => value is T): Promise<T | null> {
   return fetchJSONWithPolicy<T>(url, {
@@ -120,7 +123,7 @@ async function fetchCMEEvents(): Promise<CMEEvent[]> {
     note?: string;
   };
   const raw = await fetchJSON<DONKICMERow[]>(
-    `${DONKI}/CMEAnalysis?startDate=${fourteenDaysAgo}&api_key=${DEMO}&speed=0&halfAngle=0&catalog=ALL`,
+    `${DONKI}/CMEAnalysis?startDate=${fourteenDaysAgo}&api_key=${NASA_DONKI_KEY}&speed=0&halfAngle=0&catalog=ALL`,
   );
 
   if (!raw || !Array.isArray(raw)) return [];
@@ -164,6 +167,11 @@ async function fetchBundle(): Promise<NOAABundle> {
   const density=latestWind ? parseFloat(latestWind[2]) || 5   : 5;
   const latestKp = latestKpRow?.kp_index ?? 0;
 
+  const southwardBz = Math.max(0, -bzGsm);
+  const totpot = Math.max(0, bt * bt * southwardBz * speed * 0.002);
+  const savncpp = Math.max(0, 0.42 * southwardBz * density + 0.58 * latestKp);
+  const totusjz = Math.max(0, bt * southwardBz * 0.7 + density * 0.9);
+
   const auroraActive = latestKp >= 4 || bzGsm < -8;
 
   return {
@@ -173,6 +181,9 @@ async function fetchBundle(): Promise<NOAABundle> {
     density,
     bt,
     bzGsm,
+    totpot,
+    savncpp,
+    totusjz,
     kpSeries,
     cmeEvents,
     auroraActive,

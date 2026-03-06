@@ -25,6 +25,9 @@ const NORM = {
   magneticFieldBz:  { mean: 0,    std: 5   },
   kpIndex:          { mean: 2.5,  std: 1.8 },
   newellCoupling:   { mean: 5000, std: 8000},
+  totpot:           { mean: 900,  std: 850 },
+  savncpp:          { mean: 3.5,  std: 2.2 },
+  totusjz:          { mean: 28,   std: 16  },
 };
 
 function normalize(val: number, key: keyof typeof NORM): number {
@@ -62,16 +65,19 @@ function tanh(x: number)    { return Math.tanh(x); }
 function lstmSimStep(
   h: number, c: number,
   x_speed: number, x_bz: number, x_kp: number,
-  x_density: number
+  x_density: number,
+  x_totpot: number,
+  x_savncpp: number,
+  x_totusjz: number,
 ): { h: number; c: number } {
   // Forget gate: forget more when Bz is positive (northward = less coupling)
-  const f = sigmoid(-0.3 + 0.5 * x_bz + 0.4 * h - 0.2 * x_speed);
+  const f = sigmoid(-0.3 + 0.5 * x_bz + 0.4 * h - 0.2 * x_speed + 0.14 * x_savncpp);
   // Input gate: activate on southward Bz and high speed
-  const i = sigmoid(0.4 - 0.6 * x_bz + 0.5 * x_speed + 0.3 * x_density);
+  const i = sigmoid(0.4 - 0.6 * x_bz + 0.5 * x_speed + 0.3 * x_density + 0.16 * x_totpot + 0.12 * x_totusjz);
   // Cell candidate: driven by KP history and wind
-  const g = tanh(0.3 * x_kp - 0.4 * x_bz + 0.25 * x_speed + 0.1 * h);
+  const g = tanh(0.3 * x_kp - 0.4 * x_bz + 0.25 * x_speed + 0.1 * h + 0.1 * x_totpot + 0.09 * x_totusjz);
   // Output gate
-  const o = sigmoid(0.2 + 0.4 * x_kp + 0.3 * x_speed + 0.2 * c);
+  const o = sigmoid(0.2 + 0.4 * x_kp + 0.3 * x_speed + 0.2 * c + 0.1 * x_savncpp);
 
   const c_next = f * c + i * g;
   const h_next = o * tanh(c_next);
@@ -88,13 +94,19 @@ function simulateLSTM(features: import('../ml/types').FeatureVector): number[] {
     const x_bz      = normalize(features.magneticFieldBz[t]  ?? 0,   'magneticFieldBz');
     const x_kp      = normalize(features.kpIndex[t]          ?? 2.5, 'kpIndex');
     const x_density = normalize(features.solarWindDensity[t] ?? 7,   'solarWindDensity');
-    ({ h, c } = lstmSimStep(h, c, x_speed, x_bz, x_kp, x_density));
+    const x_totpot = normalize(features.totpotHistory[t] ?? 900, 'totpot');
+    const x_savncpp = normalize(features.savncppHistory[t] ?? 3.5, 'savncpp');
+    const x_totusjz = normalize(features.totusjzHistory[t] ?? 28, 'totusjz');
+    ({ h, c } = lstmSimStep(h, c, x_speed, x_bz, x_kp, x_density, x_totpot, x_savncpp, x_totusjz));
   }
 
   // Project forward 24 h using final hidden state
   const lastKp     = features.kpIndex[n - 1]          ?? 2.5;
   const lastBz     = features.magneticFieldBz[n - 1]  ?? 0;
   const lastSpeed  = features.solarWindSpeed[n - 1]   ?? 450;
+  const lastTotpot = features.totpotHistory[n - 1]    ?? 900;
+  const lastSavncpp = features.savncppHistory[n - 1]  ?? 3.5;
+  const lastTotusjz = features.totusjzHistory[n - 1]  ?? 28;
 
   // Trend: slope over last 6 samples
   const slope = n >= 6
@@ -110,8 +122,9 @@ function simulateLSTM(features: import('../ml/types').FeatureVector): number[] {
     const stateDecay = h * 1.8 * Math.exp(-(i * 0.1));
     // Trend projection (dampened)
     const trendContrib = slope * i * 0.85 * Math.exp(-(i * 0.05));
+    const magneticStress = Math.min(1.8, (lastTotpot / 2500) * 0.8 + (lastTotusjz / 80) * 0.6 + (lastSavncpp / 10) * 0.4);
 
-    const raw = lastKp + bzEffect + windEffect + stateDecay + trendContrib;
+    const raw = lastKp + bzEffect + windEffect + stateDecay + trendContrib + magneticStress * Math.exp(-(i * 0.09));
     // Add micro-noise for plausible non-smooth curves
     const noise = Math.sin(i * 0.7 + h * 10) * 0.12;
     return Math.max(0, Math.min(9, raw + noise));
@@ -124,12 +137,16 @@ async function tfInfer(features: import('../ml/types').FeatureVector): Promise<n
   const n = 24;
   const inputArr = new Float32Array(n * 6);
   for (let t = 0; t < n; t++) {
+    const magneticSignal =
+      ((features.totpotHistory[t] ?? 900) / 9000)
+      + ((features.savncppHistory[t] ?? 3.5) / 35)
+      + ((features.totusjzHistory[t] ?? 28) / 240);
     inputArr[t * 6 + 0] = normalize(features.solarWindSpeed[t]   ?? 450, 'solarWindSpeed');
     inputArr[t * 6 + 1] = normalize(features.solarWindDensity[t] ?? 7,   'solarWindDensity');
     inputArr[t * 6 + 2] = normalize(features.magneticFieldBt[t]  ?? 6,   'magneticFieldBt');
     inputArr[t * 6 + 3] = normalize(features.magneticFieldBz[t]  ?? 0,   'magneticFieldBz');
     inputArr[t * 6 + 4] = normalize(features.kpIndex[t]          ?? 2.5, 'kpIndex');
-    inputArr[t * 6 + 5] = (features.newellCouplingHistory[t]     ?? 5000) / 50000;
+    inputArr[t * 6 + 5] = (features.newellCouplingHistory[t]     ?? 5000) / 50000 + magneticSignal * 0.25;
   }
   const input  = tf.tensor3d(inputArr, [1, n, 6]);
   const output = model.predict(input) as tf.Tensor;

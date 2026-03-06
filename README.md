@@ -41,6 +41,22 @@ npm install
 npm run dev
 ```
 
+## Environment Setup
+
+Create/update `.env` in the project root:
+
+```dotenv
+VITE_NASA_API_KEY=your_nasa_api_key
+VITE_NASA_DONKI_API_KEY=your_nasa_api_key_or_dedicated_donki_key
+VITE_OPENWEATHER_API_KEY=your_openweather_key
+VITE_MAPBOX_TOKEN=your_mapbox_token
+```
+
+Notes:
+- NOAA SWPC endpoints used by the worker are public and do not require API keys.
+- DONKI calls now use `VITE_NASA_DONKI_API_KEY` (fallback: `DEMO_KEY`).
+- Keep `.env` private and commit only `.env.example`.
+
 ## Quality Gates
 
 ```bash
@@ -56,7 +72,7 @@ npm run build
 - `Shift + 1`–`Shift + 6`: Toggle right dock modals
 - `Esc`: Close active HUD modals and command overlays
 - Dock icons include live status dots (`green` / `amber` / `red`)
-- Performance chip (FPS/LSTM latency/NOAA age) is draggable and persists position
+- Performance chip (FPS/LSTM latency/NOAA age) is fixed at top-right for stable HUD behavior
 
 ### Neural Oracle + Data Abstraction
 
@@ -68,6 +84,18 @@ npm run build
 	- React UI consumes unified `HazardTelemetryModel`
 	- Makes it safe to swap NOAA JSON feeds with local inference engines without rewriting HUD components
 - LSTM worker now emits optional `kesslerCascade` probabilities used by Oracle and Kessler HUD
+
+### Space Weather Provider Stubs (March 2026 update)
+
+- Added live provider adapters in `src/services/spaceWeatherAdapters.ts`:
+	- `OVATION Prime` tactical nowcast stub (L1-first, Kp fallback aware)
+	- `WSA-Enlil v3` strategic forecast stub with L1-centric cone-model payload shape
+- Added provider polling hook in `src/hooks/useSpaceWeatherProviders.ts`
+- HUD now shows live provider health badges in the top command bar:
+	- Green: live L1 telemetry drivers
+	- Amber: degraded mode (including OVATION Kp fallback, lead time reduced to zero)
+	- Red: provider offline / invalid telemetry
+- `Aurora OVATION` panel now exposes current driver mode (`L1 LIVE` vs `KP FALLBACK`) and provider detail text
 
 ## Neural Oracle Usage
 
