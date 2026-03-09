@@ -32,6 +32,57 @@ export interface OrbitalElements {
 
 export interface CartesianPosition { x: number; y: number; z: number; rAU: number }
 
+export interface PlanetTrajectoryPoint {
+  date: Date;
+  x: number;
+  y: number;
+  z: number;
+  rAU: number;
+}
+
+export interface EphemerisVectorAU {
+  provider: string;
+  body: ForecastBodyName;
+  date: string;
+  x: number;
+  y: number;
+  z: number;
+  vx?: number | null;
+  vy?: number | null;
+  vz?: number | null;
+  spinPhase01?: number;
+  rotationPeriodHours?: number | null;
+}
+
+export interface ForecastConfidence {
+  orbitalConfidencePct: number;
+  horizonClass: 'near' | 'medium' | 'long' | 'deep-time';
+  notes: string;
+}
+
+export interface SunEvolutionEstimate {
+  stage: string;
+  yearsFromNow: number;
+  modelConfidencePct: number;
+  notes: string;
+}
+
+export const PLANET_BODIES = [
+  'Mercury',
+  'Venus',
+  'Earth',
+  'Mars',
+  'Jupiter',
+  'Saturn',
+  'Uranus',
+  'Neptune',
+  'Pluto',
+] as const;
+
+export const MOON_BODIES = ['Moon', 'Io', 'Europa', 'Titan'] as const;
+
+export type ForecastBodyName = (typeof PLANET_BODIES)[number] | (typeof MOON_BODIES)[number];
+
 interface SatelliteOrbit {
   parent: string; semiMajor: number; period: number;
   eccentricity: number; inclination: number; l0: number;
@@ -358,4 +409,169 @@ export function getHeliocentricDistance(bodyName: string, date: Date): number {
 export function eclipticObliquity(date: Date): number {
   const T = julianCenturies(date);
   return 23.439291111 - 0.013004167*T - 0.000000164*T**2 + 0.000000504*T**3;
+}
+
+/**
+ * Predict heliocentric trajectory points sampled on a fixed day cadence.
+ *
+ * Note: this uses the same JPL approximate-elements model as the renderer,
+ * not full DE/SPICE integration. It is suitable for visualization and
+ * medium-horizon forecasting, with best fidelity near 1800-2050.
+ */
+export function predictPlanetTrajectory(
+  planetName: string,
+  startDate: Date,
+  daysAhead: number,
+  stepDays = 1,
+): PlanetTrajectoryPoint[] {
+  const clampedStepDays = Math.max(1, Math.floor(stepDays));
+  const clampedDaysAhead = Math.max(0, Math.floor(daysAhead));
+  // Guard against accidental unbounded allocations.
+  const maxPoints = 200_000;
+  const pointCount = Math.min(maxPoints, Math.floor(clampedDaysAhead / clampedStepDays) + 1);
+
+  const points: PlanetTrajectoryPoint[] = [];
+  for (let i = 0; i < pointCount; i++) {
+    const deltaDays = i * clampedStepDays;
+    const date = new Date(startDate.getTime() + deltaDays * 86_400_000);
+    const pos = calculateOrbitalPosition(planetName, date) as CartesianPosition;
+    points.push({
+      date,
+      x: pos.x,
+      y: pos.y,
+      z: pos.z,
+      rAU: pos.rAU,
+    });
+  }
+
+  return points;
+}
+
+export function calculateBodyPosition(bodyName: ForecastBodyName, date: Date): CartesianPosition {
+  if ((PLANET_BODIES as readonly string[]).includes(bodyName)) {
+    return calculateOrbitalPosition(bodyName, date) as CartesianPosition;
+  }
+
+  if (bodyName === 'Moon') {
+    const earth = calculateOrbitalPosition('Earth', date) as CartesianPosition;
+    const moon = calculateMoonPosition(date, earth);
+    return {
+      x: moon.x,
+      y: moon.y,
+      z: moon.z,
+      rAU: moon.rAU ?? Math.sqrt(moon.x**2 + moon.y**2 + moon.z**2),
+    };
+  }
+
+  if (bodyName === 'Io' || bodyName === 'Europa') {
+    const jupiter = calculateOrbitalPosition('Jupiter', date) as CartesianPosition;
+    const sat = calculateSatellitePosition(bodyName, date, jupiter);
+    return {
+      x: sat.x,
+      y: sat.y,
+      z: sat.z,
+      rAU: sat.rAU ?? Math.sqrt(sat.x**2 + sat.y**2 + sat.z**2),
+    };
+  }
+
+  const saturn = calculateOrbitalPosition('Saturn', date) as CartesianPosition;
+  const titan = calculateSatellitePosition('Titan', date, saturn);
+  return {
+    x: titan.x,
+    y: titan.y,
+    z: titan.z,
+    rAU: titan.rAU ?? Math.sqrt(titan.x**2 + titan.y**2 + titan.z**2),
+  };
+}
+
+export function predictBodyTrajectory(
+  bodyName: ForecastBodyName,
+  startDate: Date,
+  daysAhead: number,
+  stepDays = 1,
+): PlanetTrajectoryPoint[] {
+  const clampedStepDays = Math.max(1, Math.floor(stepDays));
+  const clampedDaysAhead = Math.max(0, Math.floor(daysAhead));
+  const maxPoints = 200_000;
+  const pointCount = Math.min(maxPoints, Math.floor(clampedDaysAhead / clampedStepDays) + 1);
+
+  const points: PlanetTrajectoryPoint[] = [];
+  for (let i = 0; i < pointCount; i++) {
+    const deltaDays = i * clampedStepDays;
+    const date = new Date(startDate.getTime() + deltaDays * 86_400_000);
+    const pos = calculateBodyPosition(bodyName, date);
+    points.push({
+      date,
+      x: pos.x,
+      y: pos.y,
+      z: pos.z,
+      rAU: pos.rAU,
+    });
+  }
+
+  return points;
+}
+
+export function estimateTrajectoryConfidence(daysAhead: number): ForecastConfidence {
+  const d = Math.max(0, daysAhead);
+  if (d <= 36525) {
+    return {
+      orbitalConfidencePct: 97,
+      horizonClass: 'near',
+      notes: 'High confidence for visualization and alignment checks.'
+    };
+  }
+  if (d <= 36525 * 50) {
+    return {
+      orbitalConfidencePct: 90,
+      horizonClass: 'medium',
+      notes: 'Good orbital trend confidence, reduced positional precision.'
+    };
+  }
+  if (d <= 36525 * 5000) {
+    return {
+      orbitalConfidencePct: 74,
+      horizonClass: 'long',
+      notes: 'Broad behavior remains useful; exact phasing drifts.'
+    };
+  }
+  return {
+    orbitalConfidencePct: 48,
+    horizonClass: 'deep-time',
+    notes: 'Deep-time extrapolation only; use N-body/SPICE for scientific-grade work.'
+  };
+}
+
+export function estimateSunEvolution(daysAhead: number): SunEvolutionEstimate {
+  const years = Math.max(0, daysAhead / 365.25);
+  if (years < 1_000_000_000) {
+    return {
+      stage: 'Main Sequence (stable hydrogen burning)',
+      yearsFromNow: years,
+      modelConfidencePct: 96,
+      notes: 'Sun brightens slowly; no structural collapse expected on this horizon.'
+    };
+  }
+  if (years < 5_000_000_000) {
+    return {
+      stage: 'Late Main Sequence (increasing luminosity)',
+      yearsFromNow: years,
+      modelConfidencePct: 82,
+      notes: 'Luminosity rise dominates long-term habitability changes.'
+    };
+  }
+  if (years < 5_800_000_000) {
+    return {
+      stage: 'Subgiant to Red Giant transition',
+      yearsFromNow: years,
+      modelConfidencePct: 64,
+      notes: 'Envelope expansion timing varies by stellar model assumptions.'
+    };
+  }
+  return {
+    stage: 'Red Giant / post-main-sequence evolution',
+    yearsFromNow: years,
+    modelConfidencePct: 52,
+    notes: 'Qualitative stage confidence only; for detail use stellar evolution codes.'
+  };
 }

@@ -10,7 +10,7 @@ interface ExplanationWeight {
 }
 
 type InMessage =
-  | { type: 'INIT'; forceRulesFallback?: boolean }
+  | { type: 'INIT' }
   | { type: 'ASK'; prompt: string; snapshot: HazardTelemetryModel }
   | { type: 'EXPLAIN'; mode: ExplainMode; snapshot: HazardTelemetryModel; prompt?: string };
 
@@ -116,14 +116,7 @@ function buildExplainSummary(weights: ExplanationWeight[], mode: ExplainMode, sn
   return `${modeLabel} ${queryText}: ${topLine}. Inputs: Kp ${snapshot.kpIndex.toFixed(1)}, Bz ${snapshot.bzGsm.toFixed(1)} nT, wind ${Math.round(snapshot.solarWindSpeed)} km/s, TOTPOT ${snapshot.totpot.toFixed(1)}, SAVNCPP ${snapshot.savncpp.toFixed(2)}, TOTUSJZ ${snapshot.totusjz.toFixed(1)}.`;
 }
 
-async function initModel(forceRulesFallback = false) {
-  if (forceRulesFallback) {
-    provider = 'rules-fallback';
-    generator = null;
-    self.postMessage({ type: 'READY', provider });
-    return;
-  }
-
+async function initModel() {
   try {
     const transformers = await import('@xenova/transformers');
     transformers.env.allowLocalModels = false;
@@ -187,7 +180,7 @@ self.addEventListener('message', (ev: MessageEvent<InMessage>) => {
   const msg = ev.data;
 
   if (msg.type === 'INIT') {
-    void initModel(Boolean(msg.forceRulesFallback));
+    void initModel();
     return;
   }
 

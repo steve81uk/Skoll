@@ -1,56 +1,83 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import {
+  calculateOrbitalPosition,
+  calculateOrbitalPositionByT,
+  epochYearToT,
+  getOrbitalPeriod,
+} from '../ml/OrbitalMechanics';
 
 interface OrbitalTrailProps {
-  orbitRadius: number;
+  bodyName: string;
+  auScale: number;
+  currentDate: Date;
+  epochYear?: number;
   color?: string;
   opacity?: number;
   segments?: number;
 }
 
-const lineMaterialCache = new Map<string, THREE.LineBasicMaterial>();
-
 export const OrbitalTrail = ({ 
-  orbitRadius, 
+  bodyName,
+  auScale,
+  currentDate,
+  epochYear,
   color = '#00ffff',
   opacity = 0.15,
-  segments = 96 
+  segments = 128 
 }: OrbitalTrailProps) => {
   
   const geometry = useMemo(() => {
     const points: THREE.Vector3[] = [];
-    
+
+    const periodDays = getOrbitalPeriod(bodyName);
+    const safePeriod = Math.max(2, periodDays);
+    const hasEpochOverride = epochYear !== undefined;
+
     for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
+      const alpha = i / segments;
+      let x = 0;
+      let y = 0;
+      let z = 0;
+
+      if (hasEpochOverride) {
+        // Deep-time mode: sample one orbital period around the selected epoch.
+        const baseT = epochYearToT(epochYear);
+        const deltaDays = (alpha - 0.5) * safePeriod;
+        const sampleT = baseT + deltaDays / 36525.0;
+        const pos = calculateOrbitalPositionByT(bodyName, sampleT);
+        x = pos.x;
+        y = pos.y;
+        z = pos.z;
+      } else {
+        // Date mode: sample one orbital period centered on current timeline date.
+        const deltaDays = (alpha - 0.5) * safePeriod;
+        const sampleDate = new Date(currentDate.getTime() + deltaDays * 86_400_000);
+        const pos = calculateOrbitalPosition(bodyName, sampleDate);
+        x = pos.x;
+        y = pos.y;
+        z = pos.z;
+      }
+
       points.push(
         new THREE.Vector3(
-          Math.cos(angle) * orbitRadius,
-          0,
-          Math.sin(angle) * orbitRadius
+          x * auScale,
+          y * auScale,
+          z * auScale,
         )
       );
     }
     
     return new THREE.BufferGeometry().setFromPoints(points);
-  }, [orbitRadius, segments]);
+  }, [auScale, bodyName, currentDate, epochYear, segments]);
 
-  const material = useMemo(() => {
-    const cacheKey = `${color}-${opacity.toFixed(2)}`;
-    const cached = lineMaterialCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const created = new THREE.LineBasicMaterial({
-      color: new THREE.Color(color),
-      transparent: true,
-      opacity,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    lineMaterialCache.set(cacheKey, created);
-    return created;
-  }, [color, opacity]);
+  const material = useMemo(() => new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }), [color, opacity]);
 
   const lineObject = useMemo(() => new THREE.Line(geometry, material), [geometry, material]);
 

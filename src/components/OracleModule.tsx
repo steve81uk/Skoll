@@ -24,20 +24,7 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
   const [prompt, setPrompt] = useState('');
   const [showExplain, setShowExplain] = useState(false);
   const [explainMode, setExplainMode] = useState<'global' | 'local'>('global');
-  const {
-    provider,
-    ready,
-    loading,
-    explaining,
-    error,
-    messages,
-    explanation,
-    ask,
-    explain,
-    lowMemoryDevice,
-    modelOptIn,
-    setModelOptIn,
-  } = useNeuralOracle();
+  const { provider, ready, loading, explaining, error, messages, explanation, ask, explain } = useNeuralOracle();
 
   const chartRows = useMemo(
     () => (explanation?.weights ?? []).map((row) => ({
@@ -100,18 +87,6 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
         <div className="text-[8px] uppercase tracking-[0.12em] text-cyan-300/80">
           {ready ? provider : 'initializing'}
         </div>
-      </div>
-
-      <div className="mb-3 rounded border border-cyan-500/20 bg-black/45 p-2 text-[8px] uppercase tracking-[0.1em] text-cyan-300/80 flex items-center justify-between gap-2">
-        <span>{lowMemoryDevice ? 'Low-memory mode: rules fallback forced' : 'Rules fallback active unless model is enabled'}</span>
-        <button
-          type="button"
-          disabled={lowMemoryDevice}
-          onClick={() => setModelOptIn((prev) => !prev)}
-          className="h-6 rounded border border-cyan-500/35 px-2 text-[8px] uppercase tracking-[0.12em] text-cyan-100 disabled:opacity-40"
-        >
-          {modelOptIn ? 'Model ON' : 'Enable model'}
-        </button>
       </div>
 
       <div className="mb-3 rounded border border-cyan-500/20 bg-black/45 p-2 text-[9px] uppercase tracking-[0.08em] text-cyan-200/90">

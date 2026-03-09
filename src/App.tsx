@@ -2,7 +2,7 @@
 import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import { useFrame, useLoader, useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Orbit } from 'lucide-react';
 import * as THREE from 'three';
@@ -17,6 +17,7 @@ import type { ActiveObject } from './components/HangarModule';
 import { SatelliteOrbitalTracker } from './components/SatelliteOrbitalTracker';
 import { useGlobalTelemetry } from './hooks/useGlobalTelemetry';
 import { calculateExoTelemetry, SYSTEM_CONSTANTS } from './ml/ExoPhysics';
+import { MOON_BODIES, PLANET_BODIES, type EphemerisVectorAU, type ForecastBodyName } from './ml/OrbitalMechanics';
 import { SurfaceAtmosphere } from './shaders/SurfaceAtmosphereShader';
 import { CameraTracker } from './components/CameraTracker';
 import { DynamicSun } from './components/DynamicSun';
@@ -29,7 +30,7 @@ import { GlobalMagneticGrid } from './components/GlobalMagneticGrid';
 import { DSNLiveLink } from './components/DSNLiveLink';
 import { DataAlchemistDashboard } from './components/DataAlchemistDashboard';
 import { LiveSyncBadgeCompact } from './components/LiveSyncBadge';
-import type { LocationPreset } from './components/LocationSwitcher';
+import LocationSwitcher, { type LocationPreset } from './components/LocationSwitcher';
 import EarthBowShock from './components/EarthBowShock';
 import LiveISS, { LiveISSHUD } from './components/LiveISS';
 import SuperMAGPanel from './components/SuperMAGPanel';
@@ -37,6 +38,22 @@ import ProgressionGraph from './components/ProgressionGraph';
 import SolarThreatSimulator from './components/SolarThreatSimulator';
 import type { SyntheticCME } from './components/SolarThreatSimulator';
 import EarthCloudLayer from './components/EarthCloudLayer';
+import EarthWeatherNow, { type EarthWeatherCurrent } from './components/EarthWeatherNow';
+import EarthWeatherLayers from './components/EarthWeatherLayers';
+import EarthWindStreamlines from './components/EarthWindStreamlines';
+import WeatherLayerControls from './components/WeatherLayerControls';
+import SurfaceDEMTerrain from './components/SurfaceDEMTerrain';
+import EarthCutawayExplorer from './components/EarthCutawayExplorer';
+import EarthStoryTimelinePanel from './components/EarthStoryTimelinePanel';
+import AtmosphereColumnPanel from './components/AtmosphereColumnPanel';
+import CarbonClimateLink from './components/CarbonClimateLink';
+import EmissionsImpact from './components/EmissionsImpact';
+import GICRiskMap from './components/GICRiskMap';
+import GPSAccuracyMap from './components/GPSAccuracyMap';
+import RadioBlackoutMap from './components/RadioBlackoutMap';
+import OceanClimatePanel from './components/OceanClimatePanel';
+import AlertLogPanel from './components/AlertLogPanel';
+import GlossaryPanel from './components/GlossaryPanel';
 import type { DeepTimeEpoch } from './components/DeepTimeSlicer';
 import TerminalLogHUD from './components/TerminalLogHUD';
 import EarthCoreDynamo, { EarthDynamoPanel } from './components/EarthCoreDynamo';
@@ -49,12 +66,16 @@ import PlanetCore from './components/PlanetCore';
 import GOESFluxChart from './components/GOESFluxChart';
 import GridFailureSim from './components/GridFailureSim';
 import RadioBlackoutHeatmap from './components/RadioBlackoutHeatmap';
+import TrajectoryForecastPanel from './components/TrajectoryForecastPanel';
 import { useLSTMWorker } from './hooks/useLSTMWorker';
 import { useGOESFlux } from './hooks/useGOESFlux';
 import { useNOAADONKI } from './hooks/useNOAADONKI';
 import { useSpaceWeatherProviders } from './hooks/useSpaceWeatherProviders';
 import { useAurorEyeTimelineSync } from './hooks/useAurorEyeTimelineSync';
 import { createHazardTelemetryModel } from './services/hazardModel';
+import { AudioAtmosphere } from './services/audioAtmosphere';
+import { DEFAULT_RULES, evaluateAlerts, type TriggeredAlert } from './services/alertEngine';
+import { buildSnapshotUrl, captureCanvasScreenshot, decodeSnapshot, type SnapshotState } from './services/snapshotService';
 import type { AurorEyeFrameInput, TelemetryTimelinePoint } from './services/aurorEyeSync';
 import eventsData from './ml/space_weather_events.json';
 
@@ -68,8 +89,9 @@ type DockSide = 'left' | 'right';
 type DockPanelAnchor = { top: number; left?: number; right?: number };
 type CommandMenuAnchor = { top: number; left: number };
 type TimelineContextMenu = { x: number; y: number } | null;
+type EarthLodStage = 'SPACE' | 'ORBIT' | 'REGIONAL' | 'LOCAL';
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
-const TIME_EXPLORER_BASE_HEIGHT = 64;
+const TIME_EXPLORER_BASE_HEIGHT = 132;
 
 const LazyPlanetRenderer = lazy(() => import('./components/PlanetRenderer').then((module) => ({ default: module.PlanetRenderer })));
 const LazyCMEPropagationVisualizer = lazy(() =>
@@ -135,39 +157,6 @@ const SatelliteCameraFocus = ({
   }, [focusOnPlanet, onComplete, target, trigger]);
 
   return null;
-};
-
-const SurfaceGroundPlane = ({ planetName }: { planetName: BodyName | null }) => {
-  const textureTarget = planetName ? planetName.toLowerCase() : 'earth';
-  // Texture mapping for surface mode
-  const textureMap: Record<string, string> = {
-    mercury: '/textures/2k_mercury.jpg',
-    venus: '/textures/2k_venus_surface.jpg',
-    earth: '/textures/8k_earth_daymap.jpg',
-    mars: '/textures/2k_mars.jpg',
-    jupiter: '/textures/2k_jupiter.jpg',
-    saturn: '/textures/2k_saturn.jpg',
-    uranus: '/textures/2k_uranus.jpg',
-    neptune: '/textures/2k_neptune.jpg',
-    pluto: '/textures/2k_mercury.jpg',
-  };
-  const texturePath = textureMap[textureTarget] || '/textures/8k_earth_daymap.jpg';
-  const texture = useLoader(THREE.TextureLoader, texturePath);
-
-  useEffect(() => {
-    texture.generateMipmaps = false;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.anisotropy = 1;
-    texture.needsUpdate = true;
-  }, [texture]);
-
-  return (
-    <mesh position={[0, -5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[420, 420, 256, 256]} />
-      <meshStandardMaterial map={texture} roughness={0.95} metalness={0.05} />
-    </mesh>
-  );
 };
 
 const CMECameraShakeBurst = ({ active }: { active: boolean }) => {
@@ -236,30 +225,6 @@ const MissionUTCTime = () => {
   );
 };
 
-const SceneInvalidationController = ({ animate, nonce }: { animate: boolean; nonce: number }) => {
-  const { invalidate } = useThree();
-
-  useEffect(() => {
-    invalidate();
-  }, [invalidate, nonce]);
-
-  useEffect(() => {
-    if (!animate) {
-      return;
-    }
-
-    const id = window.setInterval(() => {
-      invalidate();
-    }, 1000 / 24);
-
-    return () => {
-      window.clearInterval(id);
-    };
-  }, [animate, invalidate]);
-
-  return null;
-};
-
 const formatTimelineDate = (value: Date) => value.toLocaleDateString('en-US', {
   month: 'short',
   day: '2-digit',
@@ -268,6 +233,94 @@ const formatTimelineDate = (value: Date) => value.toLocaleDateString('en-US', {
 }).toUpperCase();
 
 const formatTimelineTime = (value: Date) => value.toISOString().slice(11, 19);
+
+const EarthZoomLadderController = ({
+  active,
+  viewMode,
+  planetRefs,
+  onLodChange,
+  onRequestSurface,
+}: {
+  active: boolean;
+  viewMode: ViewMode;
+  planetRefs: Map<string, THREE.Group>;
+  onLodChange: (lod: EarthLodStage, distance: number) => void;
+  onRequestSurface: () => void;
+}) => {
+  const { camera } = useThree();
+  const lastLodRef = useRef<EarthLodStage>('SPACE');
+  const lastSurfaceReqRef = useRef(0);
+
+  useFrame(() => {
+    if (!active) return;
+    const earthRef = planetRefs.get('Earth');
+    if (!earthRef) return;
+
+    const earthPos = new THREE.Vector3().setFromMatrixPosition(earthRef.matrixWorld);
+    const distance = camera.position.distanceTo(earthPos);
+
+    const lod: EarthLodStage = distance > 130
+      ? 'SPACE'
+      : distance > 42
+        ? 'ORBIT'
+        : distance > 9
+          ? 'REGIONAL'
+          : 'LOCAL';
+
+    if (lod !== lastLodRef.current) {
+      lastLodRef.current = lod;
+      onLodChange(lod, distance);
+    } else {
+      onLodChange(lod, distance);
+    }
+
+    // Dynamic near/far clip planes to reduce precision flicker when zooming Earth.
+    const nextNear = THREE.MathUtils.clamp(distance * 0.0025, 0.0007, 0.75);
+    const nextFar = THREE.MathUtils.clamp(distance * 80, 500, 2_000_000);
+    if (Math.abs(camera.near - nextNear) > 0.0005 || Math.abs(camera.far - nextFar) > 50) {
+      camera.near = nextNear;
+      camera.far = nextFar;
+      camera.updateProjectionMatrix();
+    }
+
+    if (viewMode === 'HELIOCENTRIC' && distance < 3.4) {
+      const now = performance.now();
+      if (now - lastSurfaceReqRef.current > 1500) {
+        lastSurfaceReqRef.current = now;
+        onRequestSurface();
+      }
+    }
+  });
+
+  return null;
+};
+
+const SurfaceCameraController = ({
+  enabled,
+  onAltitudeChange,
+  sampleTerrainHeight,
+}: {
+  enabled: boolean;
+  onAltitudeChange: (altitudeKm: number) => void;
+  sampleTerrainHeight: (x: number, z: number) => number;
+}) => {
+  const { camera } = useThree();
+
+  useFrame((_, delta) => {
+    if (!enabled) return;
+
+    const terrainBaseY = sampleTerrainHeight(camera.position.x, camera.position.z);
+    const floorY = terrainBaseY + 1.7;
+    if (camera.position.y < floorY) {
+      camera.position.y = THREE.MathUtils.lerp(camera.position.y, floorY, Math.min(1, delta * 10));
+    }
+
+    const meters = Math.max(0, (camera.position.y - terrainBaseY) * 900);
+    onAltitudeChange(meters / 1000);
+  }, -1);
+
+  return null;
+};
 
 export default function App() {
   const [booted, setBooted] = useState(false);
@@ -307,13 +360,29 @@ export default function App() {
   const [timeExplorerHeight, setTimeExplorerHeight] = useState(TIME_EXPLORER_BASE_HEIGHT);
   const [isTimePlaying, setIsTimePlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [useDeepTimeEpoch, setUseDeepTimeEpoch] = useState(false);
   const [timelineContextMenu, setTimelineContextMenu] = useState<TimelineContextMenu>(null);
+  const [highPrecisionModeEnabled, setHighPrecisionModeEnabled] = useState(true);
+  const [highPrecisionVectors, setHighPrecisionVectors] = useState<Record<string, EphemerisVectorAU>>({});
   const [fps, setFps] = useState(60);
   const [lstmLatencyMs, setLstmLatencyMs] = useState<number | null>(null);
-  const [sceneInvalidateNonce, setSceneInvalidateNonce] = useState(0);
-  const [panelOpenOrder, setPanelOpenOrder] = useState<string[]>([]);
   const inferDispatchRef = useRef<number | null>(null);
-  const [location] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
+  const [location, setLocation] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
+  const [surfaceAltitudeKm, setSurfaceAltitudeKm] = useState(0);
+  const [surfaceWindKmh, setSurfaceWindKmh] = useState(20);
+  const [weatherOpacity, setWeatherOpacity] = useState({ cloud: 0.55, precip: 0.45, snow: 0.55, wind: 0.36, stream: 0.52 });
+  const [weatherVisibility, setWeatherVisibility] = useState({ cloud: true, precip: true, snow: true, wind: true, stream: true });
+  const terrainSamplerRef = useRef<(x: number, z: number) => number>(() => -5);
+  const [earthLodStage, setEarthLodStage] = useState<EarthLodStage>('SPACE');
+  const [earthZoomDistance, setEarthZoomDistance] = useState(999);
+  const [cutawayEnabled, setCutawayEnabled] = useState(false);
+  const [cutawaySliceEnabled, setCutawaySliceEnabled] = useState(true);
+  const [cutawaySliceDepth, setCutawaySliceDepth] = useState(0);
+  const [cutawayShells, setCutawayShells] = useState({ crust: true, mantle: true, outerCore: true, innerCore: true });
+  const [co2Ppm, setCo2Ppm] = useState<number | null>(null);
+  const [alerts, setAlerts] = useState<TriggeredAlert[]>([]);
+  const [toasts, setToasts] = useState<TriggeredAlert[]>([]);
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
   const [hudMinimized] = useState(false);
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
@@ -325,6 +394,56 @@ export default function App() {
   const dockPanelRef = useRef<HTMLDivElement | null>(null);
   const commandMenuRef = useRef<HTMLDivElement | null>(null);
   const holdScrubRef = useRef<number | null>(null);
+  const precisionFetchTicketRef = useRef(0);
+  const audioRef = useRef<AudioAtmosphere | null>(null);
+
+  const handleShareSnapshot = useCallback(async () => {
+    const snapshotEpoch = currentDate === 'LIVE' ? Date.now() : currentDate.getTime();
+    const snapshot: SnapshotState = {
+      epoch: snapshotEpoch,
+      cameraPosition: [0, 0, 0],
+      cameraTarget: [0, 0, 0],
+      openPanels: [activeSubTileId],
+      activeSimulation: cmeActive ? 'cme' : undefined,
+      zoomStage: earthLodStage,
+    };
+
+    const shareUrl = buildSnapshotUrl(snapshot);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      const screenshot = await captureCanvasScreenshot();
+      setToasts((prev) => [
+        {
+          id: `snapshot-${Date.now()}`,
+          severity: 'info' as const,
+          message: screenshot ? 'Snapshot URL copied (+ screenshot captured locally)' : 'Snapshot URL copied to clipboard',
+          ts: Date.now(),
+          value: 1,
+        },
+        ...prev,
+      ].slice(0, 12));
+    } catch {
+      setToasts((prev) => [
+        {
+          id: `snapshot-fail-${Date.now()}`,
+          severity: 'warning' as const,
+          message: 'Snapshot copy failed. Clipboard permission required.',
+          ts: Date.now(),
+          value: 0,
+        },
+        ...prev,
+      ].slice(0, 12));
+    }
+  }, [activeSubTileId, cmeActive, currentDate, earthLodStage]);
+
+  const requestNotificationPermission = useCallback(async () => {
+    if (!('Notification' in window)) {
+      return;
+    }
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+  }, []);
 
   /** Master Reset — clears every active simulation in one click. */
   const handleMasterReset = useCallback(() => {
@@ -339,6 +458,7 @@ export default function App() {
     setApophisVisible(false);
     setImpactBurstActive(false);
     setSelectedEpochYear(new Date().getFullYear());
+    setUseDeepTimeEpoch(false);
     setPlaybackRate(1);
   }, []);
   const telemetry = useGlobalTelemetry();
@@ -414,6 +534,16 @@ export default function App() {
       { id: 'heliopause',        label: 'Heliopause Shell' },
       { id: 'grid-failure',      label: 'Grid Failure Sim' },
       { id: 'radio-blackout',    label: 'D-RAP Blackout' },
+      { id: 'trajectory-forecast', label: 'Trajectory Forecast' },
+      { id: 'atmos-column', label: 'Atmospheric Column' },
+      { id: 'carbon-link', label: 'Carbon Climate Link' },
+      { id: 'emissions-impact', label: 'Emissions Impact' },
+      { id: 'gic-risk', label: 'GIC Risk Map' },
+      { id: 'gps-accuracy', label: 'GPS Accuracy Map' },
+      { id: 'radio-blackout-map', label: 'HF Blackout Map' },
+      { id: 'ocean-climate', label: 'Ocean Climate' },
+      { id: 'alert-log', label: 'Alert Log' },
+      { id: 'glossary', label: 'Glossary' },
     ],
     [],
   );
@@ -426,16 +556,16 @@ export default function App() {
       'live-telemetry': [
         'telemetry', 'noaa-feed', 'supermag', 'dsn-live', 'iss-track',
         'magnetic-grid', 'mission-core', 'iss-stream', 'terminal-log',
-        'aurora-ovation', 'goes-flux',
+        'aurora-ovation', 'goes-flux', 'atmos-column', 'alert-log', 'glossary',
       ],
       'ml-forecasts': [
         'lstm-forecast', 'forecast-radar', 'data-alchemist', 'kessler-net',
-        'progression', 'diagnostics', 'health', 'forecast-slicer',
+        'progression', 'diagnostics', 'health', 'forecast-slicer', 'trajectory-forecast', 'carbon-link', 'emissions-impact', 'ocean-climate',
       ],
       'simulations': [
         'threat-simulator', 'deep-time', 'carrington-sim', 'apophis-tracker',
         'sat-threat', 'human-impact', 'hangar', 'oracle', 'fireball', 'earth-dynamo',
-        'planet-core', 'heliopause', 'grid-failure', 'radio-blackout',
+        'planet-core', 'heliopause', 'grid-failure', 'radio-blackout', 'gic-risk', 'gps-accuracy', 'radio-blackout-map',
       ],
       'all-tools': allToolIds,
     }),
@@ -705,6 +835,101 @@ export default function App() {
     () => createHazardTelemetryModel(noaaDonki, lstmWorker, goesFlux, lstmLatencyMs),
     [goesFlux, lstmLatencyMs, lstmWorker, noaaDonki],
   );
+
+  useEffect(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get('snapshot');
+      if (!param) return;
+      const snap = decodeSnapshot(param);
+      if (snap.epoch && Number.isFinite(snap.epoch)) {
+        setCurrentDate(new Date(snap.epoch));
+      }
+      if (snap.zoomStage === 'LOCAL' || snap.zoomStage === 'REGIONAL') {
+        setViewMode('SURFACE');
+      }
+      if (Array.isArray(snap.openPanels) && snap.openPanels.length > 0) {
+        setActiveSubTileId(snap.openPanels[0]);
+        setSelectedTileId(snap.openPanels[0]);
+      }
+    } catch {
+      // Ignore invalid snapshot payloads.
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadCo2 = async () => {
+      try {
+        const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv');
+        const text = await (await fetch(url)).text();
+        const row = text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0 && !line.startsWith('#') && /\d/.test(line))
+          .map((line) => line.split(','))
+          .filter((parts) => parts.length > 3)
+          .at(-1);
+        const ppm = row ? Number(row[3]) : NaN;
+        if (Number.isFinite(ppm)) {
+          setCo2Ppm(ppm);
+        }
+      } catch {
+        // leave null
+      }
+    };
+
+    void loadCo2();
+    const id = window.setInterval(() => {
+      void loadCo2();
+    }, 60 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const bzNow = noaaDonki.bundle?.bzGsm ?? -2;
+    const sample = {
+      kp: telemetry.kpIndex ?? 0,
+      bz: bzNow,
+      solarWind: telemetry.windSpeed ?? 400,
+      xrayFlux: goesFlux.fluxWm2,
+      co2: co2Ppm ?? 0,
+      cmeCount: cmeActive ? 1 : 0,
+    };
+    const newAlerts = evaluateAlerts(sample, DEFAULT_RULES);
+    if (newAlerts.length === 0) return;
+
+    setAlerts((prev) => [...newAlerts, ...prev].slice(0, 200));
+    setToasts((prev) => [...prev, ...newAlerts]);
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      newAlerts.forEach((alert) => {
+        new Notification(alert.message, { body: `Severity: ${alert.severity.toUpperCase()}` });
+      });
+    }
+  }, [cmeActive, co2Ppm, goesFlux.fluxWm2, noaaDonki.bundle?.bzGsm, telemetry.kpIndex, telemetry.windSpeed]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setToasts((prev) => prev.filter((toast) => Date.now() - toast.ts < 10_000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new AudioAtmosphere();
+    }
+    const audio = audioRef.current;
+
+    if (audioEnabled) {
+      void audio.enable();
+      audio.updateFromTelemetry(telemetry.kpIndex ?? 0, noaaDonki.bundle?.bzGsm ?? 0, telemetry.windSpeed ?? 400);
+      if (cmeImpactActive) {
+        audio.triggerCMEArrival();
+      }
+    } else {
+      audio.disable();
+    }
+  }, [audioEnabled, cmeImpactActive, noaaDonki.bundle?.bzGsm, telemetry.kpIndex, telemetry.windSpeed]);
   const telemetryTimeline = useMemo<TelemetryTimelinePoint[]>(() => {
     const kpSeries = noaaDonki.bundle?.kpSeries ?? [];
     const points: TelemetryTimelinePoint[] = [];
@@ -1158,6 +1383,32 @@ export default function App() {
             )}
           </div>
         );
+      case 'trajectory-forecast':
+        return (
+          <TrajectoryForecastPanel
+            currentDate={effectiveDate}
+            onHighPrecisionModeChange={setHighPrecisionModeEnabled}
+            onVectorsResolved={applyResolvedVectors}
+          />
+        );
+      case 'atmos-column':
+        return <AtmosphereColumnPanel kp={telemetry.kpIndex ?? 0} solarCyclePhase={0.58} />;
+      case 'carbon-link':
+        return <CarbonClimateLink />;
+      case 'emissions-impact':
+        return <EmissionsImpact />;
+      case 'gic-risk':
+        return <GICRiskMap kpIndex={telemetry.kpIndex ?? 0} />;
+      case 'gps-accuracy':
+        return <GPSAccuracyMap kpIndex={telemetry.kpIndex ?? 0} dRapVisible={blackoutVisible} />;
+      case 'radio-blackout-map':
+        return <RadioBlackoutMap flareClass={goesFlux.flareClass} fluxWm2={goesFlux.fluxWm2} />;
+      case 'ocean-climate':
+        return <OceanClimatePanel co2Ppm={co2Ppm} />;
+      case 'alert-log':
+        return <AlertLogPanel alerts={alerts} />;
+      case 'glossary':
+        return <GlossaryPanel />;
       default:
         return null;
     }
@@ -1171,6 +1422,8 @@ export default function App() {
 
   const handleDeepTimeEpochSelect = (yearCE: number, epoch: DeepTimeEpoch) => {
     setSelectedEpochYear(yearCE);
+    setUseDeepTimeEpoch(true);
+    setIsTimePlaying(false);
     // Chicxulub K-Pg impact trigger
     if (epoch.eventType === 'impact' && yearCE <= -66_000_000) {
       setChicxulubActive(true);
@@ -1257,6 +1510,7 @@ export default function App() {
   const setViewingDate = useCallback((next: Date) => {
     setCurrentDate(next);
     setSelectedEpochYear(next.getUTCFullYear());
+    setUseDeepTimeEpoch(false);
   }, []);
 
   const shiftViewingDate = useCallback((days = 0, months = 0, years = 0) => {
@@ -1273,32 +1527,10 @@ export default function App() {
         next.setUTCDate(next.getUTCDate() + days);
       }
       setSelectedEpochYear(next.getUTCFullYear());
+      setUseDeepTimeEpoch(false);
       return next;
     });
     setIsTimePlaying(false);
-  }, []);
-
-  const requestSceneInvalidate = useCallback(() => {
-    setSceneInvalidateNonce((prev) => (prev + 1) % 100000);
-  }, []);
-
-  const closePanelByKey = useCallback((panelKey: string) => {
-    if (panelKey.startsWith('menu:')) {
-      setOpenMenuId(null);
-      setCommandMenuAnchor(null);
-      return;
-    }
-
-    if (panelKey.startsWith('dock:')) {
-      setDockModalTileId(null);
-      setDockPanelAnchor(null);
-      return;
-    }
-
-    if (panelKey === 'scene:iss') setShowISS(false);
-    if (panelKey === 'scene:apophis') setApophisVisible(false);
-    if (panelKey === 'scene:heliopause') setHeliopauseVisible(false);
-    if (panelKey === 'scene:blackout') setBlackoutVisible(false);
   }, []);
 
   const stopHoldScrub = useCallback(() => {
@@ -1326,86 +1558,19 @@ export default function App() {
         const base = prev === 'LIVE' ? new Date() : new Date(prev);
         const next = new Date(base.getTime() + playbackRate * 45 * 60 * 1000);
         setSelectedEpochYear(next.getUTCFullYear());
+        setUseDeepTimeEpoch(false);
         return next;
       });
-      requestSceneInvalidate();
     }, 250);
 
     return () => window.clearInterval(tick);
-  }, [isTimePlaying, playbackRate, requestSceneInvalidate]);
+  }, [isTimePlaying, playbackRate]);
 
   useEffect(() => {
     return () => {
       stopHoldScrub();
     };
   }, [stopHoldScrub]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => !entry.startsWith('menu:'));
-      if (!openMenuId || !activeSubTileId) {
-        return next;
-      }
-      const key = `menu:${activeSubTileId}`;
-      return [...next.filter((entry) => entry !== key), key];
-    });
-  }, [activeSubTileId, openMenuId]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => !entry.startsWith('dock:'));
-      if (!dockModalTileId) {
-        return next;
-      }
-      const key = `dock:${dockModalTileId}`;
-      return [...next.filter((entry) => entry !== key), key];
-    });
-  }, [dockModalTileId]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => entry !== 'scene:iss');
-      return showISS ? [...next, 'scene:iss'] : next;
-    });
-  }, [showISS]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => entry !== 'scene:apophis');
-      return apophisVisible ? [...next, 'scene:apophis'] : next;
-    });
-  }, [apophisVisible]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => entry !== 'scene:heliopause');
-      return heliopauseVisible ? [...next, 'scene:heliopause'] : next;
-    });
-  }, [heliopauseVisible]);
-
-  useEffect(() => {
-    setPanelOpenOrder((prev) => {
-      const next = prev.filter((entry) => entry !== 'scene:blackout');
-      return blackoutVisible ? [...next, 'scene:blackout'] : next;
-    });
-  }, [blackoutVisible]);
-
-  useEffect(() => {
-    if (panelOpenOrder.length <= 5) {
-      return;
-    }
-
-    const oldest = panelOpenOrder[0];
-    if (!oldest) {
-      return;
-    }
-
-    closePanelByKey(oldest);
-  }, [closePanelByKey, panelOpenOrder]);
-
-  useEffect(() => {
-    requestSceneInvalidate();
-  }, [effectiveDate, showISS, cmeActive, cmeImpactActive, impactBurstActive, carringtonActive, apophisVisible, blackoutVisible, heliopauseVisible, requestSceneInvalidate]);
 
   // Check if current date matches a historical event
   const currentHistoricalEvent = useMemo(() => {
@@ -1481,12 +1646,14 @@ export default function App() {
         setShowDiagnostics(false);
         setOpenMenuId(null);
         setCommandMenuAnchor(null);
+        setTimelineContextMenu(null);
       }
 
       if (event.key.toLowerCase() === 'r') {
         setCurrentDate('LIVE');
         setTacticalAlerts([]);
         setSelectedEpochYear(2026);
+        setUseDeepTimeEpoch(false);
         setCmeImpactActive(false);
         setImpactBurstActive(false);
       }
@@ -1535,6 +1702,50 @@ export default function App() {
 
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
 
+  const applyResolvedVectors = useCallback((vectors: EphemerisVectorAU[]) => {
+    const next: Record<string, EphemerisVectorAU> = {};
+    for (const vector of vectors) {
+      next[vector.body] = vector;
+    }
+    setHighPrecisionVectors(next);
+  }, []);
+
+  useEffect(() => {
+    if (!highPrecisionModeEnabled || useDeepTimeEpoch) {
+      return;
+    }
+
+    const ticket = ++precisionFetchTicketRef.current;
+    const delayMs = isTimePlaying ? 1800 : 250;
+    const id = window.setTimeout(async () => {
+      try {
+        const bodies = [...PLANET_BODIES, ...MOON_BODIES] as ForecastBodyName[];
+        const paramsDate = encodeURIComponent(effectiveDate.toISOString());
+        const responses = await Promise.all(
+          bodies.map(async (body) => {
+            const url = `http://localhost:8080/api/ephemeris/horizons?body=${encodeURIComponent(body)}&date=${paramsDate}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`Horizons API ${response.status} for ${body}`);
+            }
+            const payload = await response.json();
+            return payload?.ok ? (payload.vector as EphemerisVectorAU) : null;
+          }),
+        );
+
+        if (ticket !== precisionFetchTicketRef.current) {
+          return;
+        }
+
+        applyResolvedVectors(responses.filter((row): row is EphemerisVectorAU => row != null));
+      } catch (err) {
+        console.warn('[Skoll] High-precision fetch failed:', err);
+      }
+    }, delayMs);
+
+    return () => window.clearTimeout(id);
+  }, [applyResolvedVectors, effectiveDate, highPrecisionModeEnabled, isTimePlaying, useDeepTimeEpoch]);
+
   const envDiagnostics = useMemo(() => {
     const checks = {
       nasaApi: Boolean(import.meta.env.VITE_NASA_API_KEY),
@@ -1578,36 +1789,37 @@ export default function App() {
       <div className="fixed inset-0 z-0 pointer-events-auto">
         <SlateErrorBoundary moduleName="Observa-Scene" fallback={<div className="absolute inset-0 bg-black/40" />}>
           <Canvas
-            frameloop="demand"
-            dpr={[0.75, 1]}
-            gl={{ antialias: false, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
-            onCreated={(state) => {
-              const gl = state.gl;
-              gl.shadowMap.enabled = false;
-              const context = gl.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
-              const debugInfo = context.getExtension('WEBGL_debug_renderer_info');
-              if (debugInfo) {
-                console.log('GPU Vendor:', context.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
-                console.log('GPU Renderer:', context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
-              }
-              console.log('Max texture size:', context.getParameter(context.MAX_TEXTURE_SIZE));
-              console.log('Max vertex attribs:', context.getParameter(context.MAX_VERTEX_ATTRIBS));
+            shadows
+            dpr={[1, 1.5]}
+            gl={{ antialias: true, alpha: true, logarithmicDepthBuffer: true }}
+            onCreated={({ gl }) => {
+              gl.shadowMap.enabled = true;
+              gl.shadowMap.type = THREE.PCFShadowMap;
+              gl.localClippingEnabled = true;
               setTexturesLoaded(true);
             }}
             style={{ position: 'absolute', insetBlockStart: 0, insetInlineStart: 0, zIndex: 0 }}
           >
-            <SceneInvalidationController
-              animate={isTimePlaying || cmeActive || cmeImpactActive || impactBurstActive || carringtonActive || showISS}
-              nonce={sceneInvalidateNonce}
+            <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} near={0.001} far={2_000_000} />
+            <EarthZoomLadderController
+              active={currentPlanet === 'Earth'}
+              viewMode={viewMode}
+              planetRefs={planetRefs}
+              onLodChange={(lod, distance) => {
+                setEarthLodStage(lod);
+                setEarthZoomDistance(distance);
+              }}
+              onRequestSurface={() => {
+                setViewMode('SURFACE');
+              }}
             />
-            <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} />
             <EnhancedStarfield />
             {/* Local Interstellar Cloud — warm LIC shell enveloping the scene */}
             <LocalInterstellarCloud />
             {/* Heliopause — outer heliosphere boundary (user-toggled) */}
             <HeliopauseShell visible={heliopauseVisible} />
-            <hemisphereLight intensity={0.22} color="#bbdcff" groundColor="#06080f" />
-            <directionalLight position={[120, 80, 40]} intensity={0.7} color="#fffae5" />
+            <ambientLight intensity={0.15} />
+            <pointLight position={[0, 0, 0]} intensity={5} color="#fffae5" decay={2} distance={2000} castShadow />
 
             {/* THE SUN: RENDERED IN HELIOCENTRIC MODE */}
             {viewMode === 'HELIOCENTRIC' && (
@@ -1640,7 +1852,14 @@ export default function App() {
                     />
                   </mesh>
                   <SurfaceAtmosphere color="#00f3ff" type="CO2" density={Math.max(0.9, telemetry.currentIntensity * 2)} />
-                  <SurfaceGroundPlane planetName={currentPlanet} />
+                  <SurfaceDEMTerrain
+                    planetName={currentPlanet}
+                    location={location}
+                    visible
+                    onSamplerReady={(sampler) => {
+                      terrainSamplerRef.current = sampler;
+                    }}
+                  />
                 </>
               ) : (
                 <Suspense fallback={null}>
@@ -1649,10 +1868,12 @@ export default function App() {
                     onFocusAnimationComplete={handleFocusAnimationComplete}
                     currentIntensity={telemetry.currentIntensity}
                     currentDate={effectiveDate}
+                    isLiveMode={currentDate === 'LIVE'}
                     cmeOverdrive={cmeImpactActive}
                     standoffDistance={telemetry.standoffDistance}
                     onPlanetRefsReady={setPlanetRefs}
-                    epochYear={selectedEpochYear}
+                    epochYear={useDeepTimeEpoch ? selectedEpochYear : undefined}
+                    positionOverridesAu={highPrecisionModeEnabled ? highPrecisionVectors : undefined}
                   />
                   {/* Apophis 2029 flyby orbit */}
                   <LazyApophisTracker visible={apophisVisible} epochYear={selectedEpochYear} />
@@ -1695,7 +1916,46 @@ export default function App() {
                           solarWindSpeed={syntheticCME?.speed ?? noaaDonki.bundle?.speed ?? 450}
                         />
                         {/* Live cloud layer on Earth */}
-                        <EarthCloudLayer earthPos={pos} visible />
+                        <EarthCloudLayer
+                          earthPos={pos}
+                          visible={weatherVisibility.cloud}
+                          owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
+                          opacity={weatherOpacity.cloud}
+                          currentDate={effectiveDate}
+                          isLiveMode={currentDate === 'LIVE'}
+                        />
+                        <EarthWeatherLayers
+                          earthPos={pos}
+                          visible
+                          owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
+                          opacityPrecip={weatherOpacity.precip}
+                          opacitySnow={weatherOpacity.snow}
+                          opacityWind={weatherOpacity.wind}
+                          showPrecip={weatherVisibility.precip}
+                          showSnow={weatherVisibility.snow}
+                          showWind={weatherVisibility.wind}
+                          currentDate={effectiveDate}
+                          isLiveMode={currentDate === 'LIVE'}
+                        />
+                        <EarthWindStreamlines
+                          earthPos={pos}
+                          visible={weatherVisibility.stream}
+                          opacity={weatherOpacity.stream}
+                          streamCount={earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
+                          speedScale={Math.max(0.35, surfaceWindKmh / 24)}
+                          currentDate={effectiveDate}
+                          isLiveMode={currentDate === 'LIVE'}
+                        />
+                        <EarthCutawayExplorer
+                          earthPos={pos}
+                          visible={cutawayEnabled && (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL')}
+                          sliceEnabled={cutawaySliceEnabled}
+                          sliceDepth={cutawaySliceDepth}
+                          showCrust={cutawayShells.crust}
+                          showMantle={cutawayShells.mantle}
+                          showOuterCore={cutawayShells.outerCore}
+                          showInnerCore={cutawayShells.innerCore}
+                        />
                         {/* Real-time ISS orbital trail */}
                         {showISS && <LiveISS earthPos={pos} visible={showISS} />}
                         {/* Chicxulub K-Pg impact sequence */}
@@ -1725,13 +1985,11 @@ export default function App() {
               )}
             </Suspense>
 
-            <OrbitControls
-              enablePan
-              enableZoom
-              makeDefault
-              minDistance={0.1}
-              maxDistance={100000}
-              onChange={requestSceneInvalidate}
+            <OrbitControls enablePan enableZoom enableDamping dampingFactor={0.08} makeDefault minDistance={0.005} maxDistance={100000} maxPolarAngle={viewMode === 'SURFACE' ? Math.PI / 1.95 : Math.PI} />
+            <SurfaceCameraController
+              enabled={viewMode === 'SURFACE'}
+              onAltitudeChange={setSurfaceAltitudeKm}
+              sampleTerrainHeight={(x, z) => terrainSamplerRef.current(x, z)}
             />
             (
               <Suspense fallback={null}>
@@ -1786,8 +2044,33 @@ export default function App() {
             <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-2">
               <MissionUTCTime />
               <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
+              <LocationSwitcher value={location} onChange={setLocation} />
             </div>
             <div className="aurora-command-pill min-w-0 flex items-center gap-2 justify-start md:justify-end">
+              <button
+                type="button"
+                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${audioEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                onClick={() => setAudioEnabled((prev) => !prev)}
+                title="Toggle space-weather sonification"
+              >
+                Audio {audioEnabled ? 'On' : 'Off'}
+              </button>
+              <button
+                type="button"
+                className="h-6 rounded border border-cyan-500/35 bg-black/20 px-2 text-[8px] uppercase tracking-[0.12em] text-cyan-300/90"
+                onClick={() => void requestNotificationPermission()}
+                title="Enable browser notifications"
+              >
+                Alerts {('Notification' in window) ? Notification.permission : 'n/a'}
+              </button>
+              <button
+                type="button"
+                className="h-6 rounded border border-cyan-500/35 bg-black/20 px-2 text-[8px] uppercase tracking-[0.12em] text-cyan-300/90"
+                onClick={() => void handleShareSnapshot()}
+                title="Copy shareable snapshot URL"
+              >
+                Share
+              </button>
               <div className="h-6 w-6 rounded-md border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
                 <Orbit size={13} />
               </div>
@@ -1995,11 +2278,92 @@ export default function App() {
 
             {/* Live ISS HUD overlay */}
             {showISS && <LiveISSHUD data={null} visible={showISS} />}
+            <EarthWeatherNow
+              visible={currentPlanet === 'Earth' && viewMode === 'HELIOCENTRIC'}
+              latitude={location.lat}
+              longitude={location.lon}
+              locationName={location.name}
+              onCurrentChange={(current: EarthWeatherCurrent | null) => {
+                if (current?.wind_speed_10m != null) {
+                  setSurfaceWindKmh(current.wind_speed_10m);
+                }
+              }}
+            />
+            <WeatherLayerControls
+              visible={currentPlanet === 'Earth' && viewMode === 'HELIOCENTRIC'}
+              opacity={weatherOpacity}
+              visibility={weatherVisibility}
+              onOpacityChange={setWeatherOpacity}
+              onVisibilityChange={setWeatherVisibility}
+            />
+            <EarthStoryTimelinePanel
+              visible={currentPlanet === 'Earth'}
+              lodStage={earthLodStage}
+              windSpeed={surfaceWindKmh}
+              kpIndex={telemetry.kpIndex ?? 0}
+              cmeActive={cmeActive}
+              cmeImpactActive={cmeImpactActive}
+              blackoutVisible={blackoutVisible}
+              dateLabel={formatTimelineDate(effectiveDate)}
+            />
+            {currentPlanet === 'Earth' && (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL') && (
+              <div className="pointer-events-auto absolute bottom-24 right-[252px] z-[75] min-w-[240px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm">
+                <div className="text-[8px] uppercase tracking-[0.16em] text-cyan-400/80">Cutaway Earth</div>
+                <label className="mt-1 flex items-center gap-1 text-[9px] uppercase tracking-[0.08em]">
+                  <input type="checkbox" checked={cutawayEnabled} onChange={(event) => setCutawayEnabled(event.currentTarget.checked)} />
+                  Enable Cutaway
+                </label>
+                <label className="mt-1 flex items-center gap-1 text-[9px] uppercase tracking-[0.08em]">
+                  <input type="checkbox" checked={cutawaySliceEnabled} onChange={(event) => setCutawaySliceEnabled(event.currentTarget.checked)} disabled={!cutawayEnabled} />
+                  Slice Plane
+                </label>
+                <div className="mt-1 text-[8px] uppercase tracking-[0.08em] text-cyan-200/80">Slice Depth</div>
+                <input
+                  type="range"
+                  min={-1.8}
+                  max={1.8}
+                  step={0.02}
+                  value={cutawaySliceDepth}
+                  onChange={(event) => setCutawaySliceDepth(Number(event.currentTarget.value))}
+                  disabled={!cutawayEnabled}
+                />
+                <div className="mt-1 grid grid-cols-2 gap-1 text-[8px] uppercase tracking-[0.08em]">
+                  <label><input type="checkbox" checked={cutawayShells.crust} onChange={(event) => setCutawayShells((prev) => ({ ...prev, crust: event.currentTarget.checked }))} disabled={!cutawayEnabled} /> Crust</label>
+                  <label><input type="checkbox" checked={cutawayShells.mantle} onChange={(event) => setCutawayShells((prev) => ({ ...prev, mantle: event.currentTarget.checked }))} disabled={!cutawayEnabled} /> Mantle</label>
+                  <label><input type="checkbox" checked={cutawayShells.outerCore} onChange={(event) => setCutawayShells((prev) => ({ ...prev, outerCore: event.currentTarget.checked }))} disabled={!cutawayEnabled} /> Outer Core</label>
+                  <label><input type="checkbox" checked={cutawayShells.innerCore} onChange={(event) => setCutawayShells((prev) => ({ ...prev, innerCore: event.currentTarget.checked }))} disabled={!cutawayEnabled} /> Inner Core</label>
+                </div>
+                <div className="mt-1 text-[8px] uppercase tracking-[0.08em] text-cyan-300/80">Zoom {earthZoomDistance.toFixed(2)} u • {earthLodStage}</div>
+              </div>
+            )}
             <LandingSlate planetName={viewMode === 'HELIOCENTRIC' ? currentPlanet : null} onInitiateLanding={() => setViewMode('SURFACE')} />
             <MagneticReversalAlert active={selectedEpochYear <= -66000000} />
 
             {viewMode === 'SURFACE' && (
-              <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ top: 12 }}>Exit Landing</button>
+              <>
+                <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ top: 12 }}>Exit Landing</button>
+                <div className="absolute left-6 pointer-events-none rounded border border-cyan-500/30 bg-black/70 px-3 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100" style={{ top: 12 }}>
+                  Altitude {surfaceAltitudeKm.toFixed(2)} km
+                </div>
+              </>
+            )}
+
+            {toasts.length > 0 && (
+              <div className="pointer-events-none fixed right-3 z-[120] flex w-[min(92vw,22rem)] flex-col gap-1" style={{ top: controlBarHeight + 12 }}>
+                {toasts.slice(0, 4).map((toast) => (
+                  <div
+                    key={`${toast.id}-${toast.ts}`}
+                    className={`rounded border px-2 py-1 text-[9px] uppercase tracking-[0.08em] backdrop-blur-sm ${toast.severity === 'critical'
+                      ? 'border-red-400/60 bg-red-500/20 text-red-100'
+                      : toast.severity === 'warning'
+                        ? 'border-amber-400/60 bg-amber-500/20 text-amber-100'
+                        : 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'}`}
+                  >
+                    <div className="font-semibold">{toast.severity}</div>
+                    <div className="opacity-90">{toast.message}</div>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}
@@ -2097,8 +2461,6 @@ export default function App() {
               <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
               <span className="mx-1 text-cyan-500/40">|</span>
               <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
-              <span className="mx-1 text-cyan-500/40">|</span>
-              <span className="telemetry-value">PANELS {panelOpenOrder.length}</span>
             </div>
           </div>
 
@@ -2114,7 +2476,7 @@ export default function App() {
                     setIsTimePlaying(false);
                     setCurrentDate('LIVE');
                     setSelectedEpochYear(new Date().getUTCFullYear());
-                    requestSceneInvalidate();
+                    setUseDeepTimeEpoch(false);
                   }}
                   className={`timeline-status-link inline-flex items-center gap-1.5 ${currentDate === 'LIVE' ? 'is-live' : 'is-historical'}`}
                 >
@@ -2142,7 +2504,7 @@ export default function App() {
                     handleMasterReset();
                     setCurrentDate('LIVE');
                     setSelectedEpochYear(new Date().getUTCFullYear());
-                    requestSceneInvalidate();
+                    setUseDeepTimeEpoch(false);
                   }}
                   className="timeline-mini-link"
                 >
@@ -2176,7 +2538,6 @@ export default function App() {
                   onChange={(event) => {
                     setIsTimePlaying(false);
                     setViewingDate(new Date(Number(event.currentTarget.value)));
-                    requestSceneInvalidate();
                   }}
                   aria-label="Time explorer slider"
                 />
@@ -2212,7 +2573,6 @@ export default function App() {
                     if (currentDate === 'LIVE') {
                       setViewingDate(new Date());
                     }
-                    requestSceneInvalidate();
                   }}
                 >
                   {isTimePlaying ? '❚❚' : '▶'}
@@ -2240,12 +2600,6 @@ export default function App() {
                 </button>
               </div>
 
-              {panelOpenOrder.length > 3 && (
-                <div className="text-[8px] uppercase tracking-[0.1em] text-amber-300/90 text-center">
-                  Multiple panels open — close unused panels for better performance
-                </div>
-              )}
-
               {timelineContextMenu && (
                 <div
                   className="fixed z-[10020] rounded border border-cyan-500/35 bg-black/90 p-1 min-w-[180px]"
@@ -2265,7 +2619,7 @@ export default function App() {
                       setTimelineContextMenu(null);
                     }}
                   >
-                    Go to date…
+                    Go to date...
                   </button>
                   <button
                     type="button"

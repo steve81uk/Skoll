@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -27,7 +27,7 @@ import * as THREE from 'three';
 const EARTH_RADIUS    = 2.2;
 const CLOUD_OFFSET    = 0.08;          // just above surface
 const CLOUD_RADIUS    = EARTH_RADIUS + CLOUD_OFFSET;
-const DRIFT_SPEED     = 0.0005;        // radians/s — eastward drift
+const EARTH_SIDEREAL_SECONDS = 86164.0905;
 
 // Static fallback cloud texture (NASA visible earth, public domain)
 const FALLBACK_CLOUD_URL =
@@ -61,6 +61,8 @@ interface EarthCloudLayerProps {
   visible?: boolean;
   owmApiKey?: string;
   opacity?: number;
+  currentDate?: Date;
+  isLiveMode?: boolean;
 }
 
 export default function EarthCloudLayer({
@@ -68,51 +70,76 @@ export default function EarthCloudLayer({
   visible = true,
   owmApiKey,
   opacity = 0.55,
+  currentDate,
+  isLiveMode = true,
 }: EarthCloudLayerProps) {
   const meshRef    = useRef<THREE.Mesh>(null!);
   const matRef     = useRef<THREE.ShaderMaterial>(null!);
-  const driftAngle = useRef(0);
+  const loaderRef = useRef(new THREE.TextureLoader());
+  const textureRef = useRef<THREE.Texture | null>(null);
 
-  // Load cloud texture — OWM if key provided, else NASA fallback
-  const texture = useMemo(() => {
-    const loader = new THREE.TextureLoader();
-    const url = owmApiKey
-      ? `https://api.allorigins.win/raw?url=${encodeURIComponent(
-          `https://tile.openweathermap.org/map/clouds_new/1/0/0.png?appid=${owmApiKey}`,
-        )}`
-      : FALLBACK_CLOUD_URL;
-
-    const tex = loader.load(url, () => {
-      if (matRef.current) {
-        matRef.current.uniforms.uCloudTex.value = tex;
-        matRef.current.needsUpdate = true;
-      }
-    });
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+  const buildCloudUrl = useMemo(() => {
+    if (!owmApiKey) {
+      return () => FALLBACK_CLOUD_URL;
+    }
+    return () => {
+      const raw = `https://tile.openweathermap.org/map/clouds_new/0/0/0.png?appid=${owmApiKey}&ts=${Date.now()}`;
+      return `https://api.allorigins.win/raw?url=${encodeURIComponent(raw)}`;
+    };
   }, [owmApiKey]);
 
-  // Refresh texture every 15 minutes when OWM key provided
-  useEffect(() => {
-    if (!owmApiKey) return;
-    const id = setInterval(() => {
-      texture.needsUpdate = true;
-    }, 15 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [owmApiKey, texture]);
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-  useFrame((_state, delta) => {
+  useEffect(() => {
+    let mounted = true;
+    const loadTexture = () => {
+      const nextUrl = buildCloudUrl();
+      loaderRef.current.load(nextUrl, (nextTex) => {
+        if (!mounted) {
+          nextTex.dispose();
+          return;
+        }
+        nextTex.colorSpace = THREE.SRGBColorSpace;
+        nextTex.wrapS = THREE.RepeatWrapping;
+        nextTex.wrapT = THREE.ClampToEdgeWrapping;
+        setTexture((prev) => {
+          if (prev) {
+            prev.dispose();
+          }
+          textureRef.current = nextTex;
+          return nextTex;
+        });
+      });
+    };
+
+    loadTexture();
+    const refreshMs = owmApiKey ? 10 * 60 * 1000 : 30 * 60 * 1000;
+    const id = window.setInterval(loadTexture, refreshMs);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+      if (textureRef.current) {
+        textureRef.current.dispose();
+        textureRef.current = null;
+      }
+    };
+  }, [buildCloudUrl, owmApiKey]);
+
+  useFrame(() => {
     if (!meshRef.current || !visible) return;
-    // Gentle eastward drift (one full rotation ≈ 35 min in real time)
-    driftAngle.current += delta * DRIFT_SPEED;
-    meshRef.current.rotation.y = driftAngle.current;
+    const motionTimeMs = isLiveMode ? Date.now() : (currentDate?.getTime() ?? Date.now());
+    const turns = (motionTimeMs / 1000) / EARTH_SIDEREAL_SECONDS;
+    meshRef.current.rotation.y = (turns % 1) * Math.PI * 2;
     meshRef.current.position.copy(earthPos);
+    if (texture && matRef.current) {
+      matRef.current.uniforms.uCloudTex.value = texture;
+    }
   });
 
   if (!visible) return null;
 
   return (
-    <mesh ref={meshRef} position={earthPos} renderOrder={2}>
+    <mesh ref={meshRef} position={earthPos} renderOrder={8}>
       <sphereGeometry args={[CLOUD_RADIUS, 64, 32]} />
       <shaderMaterial
         ref={matRef}
@@ -124,6 +151,9 @@ export default function EarthCloudLayer({
         }}
         transparent
         depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
         side={THREE.FrontSide}
         blending={THREE.NormalBlending}
       />

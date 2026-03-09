@@ -14,6 +14,9 @@ export const DynamicSun = ({ intensity, solarWindSpeed = 450, isHistoricalEvent 
   const glowRef = useRef<THREE.Mesh>(null!);
   const coronaRef = useRef<THREE.Mesh>(null!);
   
+  // Base emissive intensity scales with solar activity
+  const baseIntensity = Math.max(8, Math.min(15, intensity * 3));
+  
   // Extreme events get visual boost
   const eventMultiplier = isHistoricalEvent && solarWindSpeed > 1500 ? 1.5 : 1.0;
   
@@ -52,13 +55,18 @@ export const DynamicSun = ({ intensity, solarWindSpeed = 450, isHistoricalEvent 
     <group position={[0, 0, 0]}>
       {/* Core Sun - Reduced size for realistic proportions */}
       <mesh ref={sunRef}>
-        <sphereGeometry args={[4, 24, 16]} />
-        <meshBasicMaterial color="#ff7a1a" toneMapped={false} />
+        <sphereGeometry args={[4, 64, 64]} />
+        <meshStandardMaterial
+          emissive="#ffcc00" 
+          emissiveIntensity={baseIntensity * eventMultiplier} 
+          color="#ff5500" 
+          toneMapped={false}
+        />
       </mesh>
 
       {/* Outer Corona Glow */}
       <mesh ref={glowRef}>
-        <sphereGeometry args={[5, 16, 12]} />
+        <sphereGeometry args={[5, 32, 32]} />
         <meshBasicMaterial
           color={solarWindSpeed > 1500 ? "#ff8800" : "#ffdd00"}
           transparent
@@ -69,7 +77,7 @@ export const DynamicSun = ({ intensity, solarWindSpeed = 450, isHistoricalEvent 
 
       {/* Animated Corona with Tendrils */}
       <mesh ref={coronaRef} rotation={[0, 0, 0]}>
-        <sphereGeometry args={[5.75, 20, 14]} />
+        <sphereGeometry args={[5.75, 48, 48]} />
         <shaderMaterial
           transparent
           depthWrite={false}
@@ -130,7 +138,7 @@ export const DynamicSun = ({ intensity, solarWindSpeed = 450, isHistoricalEvent 
       {/* Extreme Event Flare Ring */}
       {isHistoricalEvent && solarWindSpeed > 1800 && (
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[9.5, 12, 40]} />
+          <ringGeometry args={[9.5, 12, 64]} />
           <meshBasicMaterial
             color="#ff3300"
             transparent

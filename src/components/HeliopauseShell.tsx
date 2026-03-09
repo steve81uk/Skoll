@@ -178,8 +178,8 @@ export default function HeliopauseShell({ visible = true }: HeliopauseShellProps
   const tsRef  = useRef<THREE.ShaderMaterial & { uTime: number; uOpacity: number }>(null);
   const hpRef  = useRef<THREE.ShaderMaterial & { uTime: number; uOpacity: number }>(null);
 
-  const tsGeo = useMemo(() => new THREE.SphereGeometry(1_600, 24, 16), []);
-  const hpGeo = useMemo(() => new THREE.SphereGeometry(2_400, 24, 16), []);
+  const tsGeo = useMemo(() => new THREE.SphereGeometry(1_600, 48, 48), []);
+  const hpGeo = useMemo(() => new THREE.SphereGeometry(2_400, 48, 48), []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();

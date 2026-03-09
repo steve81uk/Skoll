@@ -1,0 +1,20 @@
+{
+  "kp": {
+    "name": "Kp Index",
+    "quick": "A measure of geomagnetic disturbance on a 0-9 scale.",
+    "full": "The planetary K-index (Kp) is a global index derived from magnetometer records at multiple observatories. It summarizes short-term geomagnetic variability.",
+    "formula": "Kp is derived from local K-indices and standardized to a quasi-logarithmic global scale.",
+    "history": "Introduced by Julius Bartels and collaborators in the mid-20th century.",
+    "context": "Kp 0-2 quiet, Kp 5 minor storm, Kp 8-9 severe to extreme.",
+    "citation": "Bartels, J. (1949). Ann. Intern. Geophys. Year."
+  },
+  "bz": {
+    "name": "IMF Bz",
+    "quick": "North-south magnetic component of the interplanetary field.",
+    "full": "When Bz is negative (southward), coupling with Earth's magnetic field is stronger and storms are more likely.",
+    "formula": "Commonly interpreted with coupling functions such as Newell dPhi/dt.",
+    "history": "Space physics usage expanded during the space age from in-situ IMF measurements.",
+    "context": "Sustained Bz below -10 nT often signals elevated geomagnetic risk.",
+    "citation": "NOAA SWPC space weather guidance."
+  }
+}
