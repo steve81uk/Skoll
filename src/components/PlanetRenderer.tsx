@@ -355,6 +355,7 @@ const MoonBody = ({
   const moonRadius = 0.25 + moonIndex * 0.08;
   const moonOrbitRadius = MOON_ORBIT_AU[name] * AU_SCALE * 45;
   const moonColor = new THREE.Color(moonConstant.colour);
+  const tooltipHandlers = usePlanetTooltip(name);
   const texturePath = TEXTURE_MAP[name.toLowerCase()] || '/textures/2k_moon.jpg';
   const moonTexture = useLoader(THREE.TextureLoader, texturePath);
   const orbitalPeriodDays = MOON_ORBITAL_PERIOD_DAYS[name] ?? 27.321661;
@@ -403,11 +404,25 @@ const MoonBody = ({
           moonGroupRef.current.getWorldPosition(worldPosition); // Gets the true moving position [cite: 2025-12-11]
           focusOnPlanet(worldPosition, moonRadius, onFocusComplete);
         }}
+        {...tooltipHandlers}
         castShadow
         receiveShadow
       >
         <sphereGeometry args={[moonRadius, 24, 24]} />
         <meshStandardMaterial map={moonTexture} color={moonColor} roughness={0.85} metalness={0.08} />
+      </mesh>
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          onFocus(name);
+          const worldPosition = new THREE.Vector3();
+          moonGroupRef.current.getWorldPosition(worldPosition);
+          focusOnPlanet(worldPosition, moonRadius, onFocusComplete);
+        }}
+        {...tooltipHandlers}
+      >
+        <sphereGeometry args={[moonRadius * 1.8, 16, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       {/* Moons have no significant magnetosphere — no aurora oval */}
     </group>

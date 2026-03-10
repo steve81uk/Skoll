@@ -25,7 +25,6 @@ export const CameraTracker: React.FC<CameraTrackerProps> = ({
 }) => {
   const { camera, controls } = useThree();
   const smoothTargetPos = useRef(new THREE.Vector3());
-  const smoothCameraPos = useRef(new THREE.Vector3());
 
   useEffect(() => {
     const orbitControls = controls as unknown as OrbitControlsState | null;
@@ -36,7 +35,6 @@ export const CameraTracker: React.FC<CameraTrackerProps> = ({
       const targetRef = planetRefs.get(targetName);
       if (targetRef) {
         smoothTargetPos.current.copy(targetRef.position);
-        smoothCameraPos.current.copy(camera.position);
       }
     } else {
       orbitControls.enablePan = true;
@@ -56,24 +54,6 @@ export const CameraTracker: React.FC<CameraTrackerProps> = ({
     // Smooth interpolation of controls target (where we're orbiting around)
     smoothTargetPos.current.lerp(targetPos, 0.08);
     currentControlsTarget.copy(smoothTargetPos.current);
-
-    // Keep camera at a reasonable distance
-    const distance = camera.position.distanceTo(targetPos);
-    const desiredDistance = 40; // Increased for better zoom-out
-
-    if (distance < desiredDistance * 0.4 || distance > desiredDistance * 2.5) {
-      // Reposition camera if too close or too far
-      const direction = new THREE.Vector3()
-        .subVectors(camera.position, targetPos)
-        .normalize();
-      
-      const desiredCameraPos = new THREE.Vector3()
-        .copy(targetPos)
-        .add(direction.multiplyScalar(desiredDistance));
-
-      smoothCameraPos.current.lerp(desiredCameraPos, 0.05);
-      camera.position.copy(smoothCameraPos.current);
-    }
 
     camera.lookAt(smoothTargetPos.current);
   });

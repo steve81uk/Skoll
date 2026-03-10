@@ -1,0 +1,28 @@
+{
+  "scannedAt": "2026-03-10T09:16:42.271Z",
+  "totals": {
+    "files": 127,
+    "graphNodes": 127,
+    "edges": 181,
+    "entrypoints": 9,
+    "reachable": 123,
+    "unresolvedLocalRefs": 0,
+    "orphanCandidates": 0,
+    "cycles": 0
+  },
+  "entrypoints": [
+    "src/main.tsx",
+    "server.js",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "tailwind.config.cjs",
+    "postcss.config.cjs",
+    "ecosystem.config.js",
+    "ecosystem.config.cjs"
+  ],
+  "unresolved": [],
+  "orphanCandidates": [],
+  "cycles": [],
+  "indegreeZeroReachable": []
+}
