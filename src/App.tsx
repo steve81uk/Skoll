@@ -54,6 +54,7 @@ import RadioBlackoutMap from './components/RadioBlackoutMap';
 import OceanClimatePanel from './components/OceanClimatePanel';
 import AlertLogPanel from './components/AlertLogPanel';
 import GlossaryPanel from './components/GlossaryPanel';
+import GraphMissionHub from './components/GraphMissionHub';
 import type { DeepTimeEpoch } from './components/DeepTimeSlicer';
 import TerminalLogHUD from './components/TerminalLogHUD';
 import EarthCoreDynamo, { EarthDynamoPanel } from './components/EarthCoreDynamo';
@@ -76,6 +77,7 @@ import { createHazardTelemetryModel } from './services/hazardModel';
 import { AudioAtmosphere } from './services/audioAtmosphere';
 import { DEFAULT_RULES, evaluateAlerts, type TriggeredAlert } from './services/alertEngine';
 import { buildSnapshotUrl, captureCanvasScreenshot, decodeSnapshot, type SnapshotState } from './services/snapshotService';
+import { postAlertsToRelay } from './services/socialRelay';
 import type { AurorEyeFrameInput, TelemetryTimelinePoint } from './services/aurorEyeSync';
 import eventsData from './ml/space_weather_events.json';
 
@@ -250,22 +252,44 @@ const EarthZoomLadderController = ({
   const { camera } = useThree();
   const lastLodRef = useRef<EarthLodStage>('SPACE');
   const lastSurfaceReqRef = useRef(0);
+  const smoothedDistanceRef = useRef(150);
+  const nearRef = useRef(camera.near);
+  const farRef = useRef(camera.far);
 
-  useFrame(() => {
+  const pickLod = (distance: number, current: EarthLodStage): EarthLodStage => {
+    // Hysteresis windows prevent rapid boundary flapping at Earth zoom thresholds.
+    if (current === 'SPACE') {
+      if (distance < 120) return 'ORBIT';
+      return 'SPACE';
+    }
+    if (current === 'ORBIT') {
+      if (distance > 136) return 'SPACE';
+      if (distance < 35) return 'REGIONAL';
+      return 'ORBIT';
+    }
+    if (current === 'REGIONAL') {
+      if (distance > 47) return 'ORBIT';
+      if (distance < 7.5) return 'LOCAL';
+      return 'REGIONAL';
+    }
+    // LOCAL
+    if (distance > 10.5) return 'REGIONAL';
+    return 'LOCAL';
+  };
+
+  useFrame((_, delta) => {
     if (!active) return;
     const earthRef = planetRefs.get('Earth');
     if (!earthRef) return;
 
     const earthPos = new THREE.Vector3().setFromMatrixPosition(earthRef.matrixWorld);
-    const distance = camera.position.distanceTo(earthPos);
+    const rawDistance = camera.position.distanceTo(earthPos);
 
-    const lod: EarthLodStage = distance > 130
-      ? 'SPACE'
-      : distance > 42
-        ? 'ORBIT'
-        : distance > 9
-          ? 'REGIONAL'
-          : 'LOCAL';
+    const easing = Math.min(1, Math.max(0.05, delta * 8));
+    smoothedDistanceRef.current = THREE.MathUtils.lerp(smoothedDistanceRef.current, rawDistance, easing);
+    const distance = smoothedDistanceRef.current;
+
+    const lod = pickLod(distance, lastLodRef.current);
 
     if (lod !== lastLodRef.current) {
       lastLodRef.current = lod;
@@ -275,15 +299,18 @@ const EarthZoomLadderController = ({
     }
 
     // Dynamic near/far clip planes to reduce precision flicker when zooming Earth.
-    const nextNear = THREE.MathUtils.clamp(distance * 0.0025, 0.0007, 0.75);
-    const nextFar = THREE.MathUtils.clamp(distance * 80, 500, 2_000_000);
-    if (Math.abs(camera.near - nextNear) > 0.0005 || Math.abs(camera.far - nextFar) > 50) {
-      camera.near = nextNear;
-      camera.far = nextFar;
+    const targetNear = THREE.MathUtils.clamp(distance * 0.0025, 0.0007, 0.75);
+    const targetFar = THREE.MathUtils.clamp(distance * 80, 500, 2_000_000);
+    nearRef.current = THREE.MathUtils.lerp(nearRef.current, targetNear, Math.min(1, delta * 4));
+    farRef.current = THREE.MathUtils.lerp(farRef.current, targetFar, Math.min(1, delta * 4));
+
+    if (Math.abs(camera.near - nearRef.current) > 0.0008 || Math.abs(camera.far - farRef.current) > 80) {
+      camera.near = nearRef.current;
+      camera.far = farRef.current;
       camera.updateProjectionMatrix();
     }
 
-    if (viewMode === 'HELIOCENTRIC' && distance < 3.4) {
+    if (viewMode === 'HELIOCENTRIC' && distance < 3.2) {
       const now = performance.now();
       if (now - lastSurfaceReqRef.current > 1500) {
         lastSurfaceReqRef.current = now;
@@ -383,6 +410,8 @@ export default function App() {
   const [alerts, setAlerts] = useState<TriggeredAlert[]>([]);
   const [toasts, setToasts] = useState<TriggeredAlert[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [liteMode, setLiteMode] = useState(false);
+  const [relayEnabled, setRelayEnabled] = useState(false);
   const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
   const [hudMinimized] = useState(false);
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
@@ -444,6 +473,38 @@ export default function App() {
       await Notification.requestPermission();
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const lite = localStorage.getItem('skoll-lite-mode');
+      const relay = localStorage.getItem('skoll-relay-enabled');
+      if (lite === '1') {
+        setLiteMode(true);
+        setFxQuality('LOW');
+      }
+      if (relay === '1') {
+        setRelayEnabled(true);
+      }
+    } catch {
+      // ignore persistence errors
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('skoll-lite-mode', liteMode ? '1' : '0');
+    } catch {
+      // ignore persistence errors
+    }
+  }, [liteMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('skoll-relay-enabled', relayEnabled ? '1' : '0');
+    } catch {
+      // ignore persistence errors
+    }
+  }, [relayEnabled]);
 
   /** Master Reset — clears every active simulation in one click. */
   const handleMasterReset = useCallback(() => {
@@ -544,6 +605,7 @@ export default function App() {
       { id: 'ocean-climate', label: 'Ocean Climate' },
       { id: 'alert-log', label: 'Alert Log' },
       { id: 'glossary', label: 'Glossary' },
+      { id: 'graph-hub', label: 'Graph Mission Hub' },
     ],
     [],
   );
@@ -560,7 +622,7 @@ export default function App() {
       ],
       'ml-forecasts': [
         'lstm-forecast', 'forecast-radar', 'data-alchemist', 'kessler-net',
-        'progression', 'diagnostics', 'health', 'forecast-slicer', 'trajectory-forecast', 'carbon-link', 'emissions-impact', 'ocean-climate',
+        'progression', 'diagnostics', 'health', 'forecast-slicer', 'trajectory-forecast', 'carbon-link', 'emissions-impact', 'ocean-climate', 'graph-hub',
       ],
       'simulations': [
         'threat-simulator', 'deep-time', 'carrington-sim', 'apophis-tracker',
@@ -592,6 +654,7 @@ export default function App() {
       { id: 'lstm-forecast', label: 'LSTM', icon: '∿', tone: 'forecast' },
       { id: 'magnetic-grid', label: 'Mag Grid', icon: '⋈', tone: 'telemetry' },
       { id: 'data-alchemist', label: 'Alchemy', icon: '⚗', tone: 'forecast' },
+      { id: 'graph-hub', label: 'Graphs', icon: '▦', tone: 'forecast' },
     ],
     [],
   );
@@ -905,7 +968,13 @@ export default function App() {
         new Notification(alert.message, { body: `Severity: ${alert.severity.toUpperCase()}` });
       });
     }
-  }, [cmeActive, co2Ppm, goesFlux.fluxWm2, noaaDonki.bundle?.bzGsm, telemetry.kpIndex, telemetry.windSpeed]);
+    if (relayEnabled) {
+      const outbound = newAlerts.filter((alert) => alert.severity !== 'info');
+      if (outbound.length > 0) {
+        void postAlertsToRelay(outbound);
+      }
+    }
+  }, [cmeActive, co2Ppm, goesFlux.fluxWm2, noaaDonki.bundle?.bzGsm, relayEnabled, telemetry.kpIndex, telemetry.windSpeed]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -1409,6 +1478,15 @@ export default function App() {
         return <AlertLogPanel alerts={alerts} />;
       case 'glossary':
         return <GlossaryPanel />;
+      case 'graph-hub':
+        return (
+          <GraphMissionHub
+            kpSeries={noaaDonki.bundle?.kpSeries ?? []}
+            kpForecast24h={lstmWorker.kpCurve24h ?? []}
+            co2Ppm={co2Ppm}
+            goesFluxWm2={goesFlux.fluxWm2}
+          />
+        );
       default:
         return null;
     }
@@ -1701,6 +1779,7 @@ export default function App() {
   }, [telemetry.kpIndex, telemetry.source]);
 
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
+  const hasCriticalToast = toasts.some((toast) => toast.severity === 'critical');
 
   const applyResolvedVectors = useCallback((vectors: EphemerisVectorAU[]) => {
     const next: Record<string, EphemerisVectorAU> = {};
@@ -1789,11 +1868,11 @@ export default function App() {
       <div className="fixed inset-0 z-0 pointer-events-auto">
         <SlateErrorBoundary moduleName="Observa-Scene" fallback={<div className="absolute inset-0 bg-black/40" />}>
           <Canvas
-            shadows
-            dpr={[1, 1.5]}
-            gl={{ antialias: true, alpha: true, logarithmicDepthBuffer: true }}
+            shadows={!liteMode}
+            dpr={liteMode ? [0.8, 1] : [1, 1.5]}
+            gl={{ antialias: !liteMode, alpha: true, logarithmicDepthBuffer: !liteMode }}
             onCreated={({ gl }) => {
-              gl.shadowMap.enabled = true;
+              gl.shadowMap.enabled = !liteMode;
               gl.shadowMap.type = THREE.PCFShadowMap;
               gl.localClippingEnabled = true;
               setTexturesLoaded(true);
@@ -1813,13 +1892,13 @@ export default function App() {
                 setViewMode('SURFACE');
               }}
             />
-            <EnhancedStarfield />
+            {!liteMode && <EnhancedStarfield />}
             {/* Local Interstellar Cloud — warm LIC shell enveloping the scene */}
-            <LocalInterstellarCloud />
+            {!liteMode && <LocalInterstellarCloud />}
             {/* Heliopause — outer heliosphere boundary (user-toggled) */}
             <HeliopauseShell visible={heliopauseVisible} />
             <ambientLight intensity={0.15} />
-            <pointLight position={[0, 0, 0]} intensity={5} color="#fffae5" decay={2} distance={2000} castShadow />
+            <pointLight position={[0, 0, 0]} intensity={5} color="#fffae5" decay={2} distance={2000} castShadow={!liteMode} />
 
             {/* THE SUN: RENDERED IN HELIOCENTRIC MODE */}
             {viewMode === 'HELIOCENTRIC' && (
@@ -1831,11 +1910,11 @@ export default function App() {
                 />
                 <Suspense fallback={null}>
                   {/* Sagittarius A* — supermassive black hole at galactic centre */}
-                  <LazySagittariusA />
+                  {!liteMode && <LazySagittariusA />}
                   {/* Kuiper Belt — visible in heliocentric view */}
-                  <LazyKuiperBelt visible={viewMode === 'HELIOCENTRIC'} />
+                  {!liteMode && <LazyKuiperBelt visible={viewMode === 'HELIOCENTRIC'} />}
                   {/* Oort Cloud — log-depth GLSL shell at artistic 4–7k units */}
-                  <LazyOortCloud visible={viewMode === 'HELIOCENTRIC'} />
+                  {!liteMode && <LazyOortCloud visible={viewMode === 'HELIOCENTRIC'} />}
                 </Suspense>
               </>
             )}
@@ -1926,7 +2005,7 @@ export default function App() {
                         />
                         <EarthWeatherLayers
                           earthPos={pos}
-                          visible
+                          visible={!liteMode}
                           owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
                           opacityPrecip={weatherOpacity.precip}
                           opacitySnow={weatherOpacity.snow}
@@ -1939,9 +2018,9 @@ export default function App() {
                         />
                         <EarthWindStreamlines
                           earthPos={pos}
-                          visible={weatherVisibility.stream}
+                          visible={!liteMode && weatherVisibility.stream}
                           opacity={weatherOpacity.stream}
-                          streamCount={earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
+                          streamCount={liteMode ? 60 : earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
                           speedScale={Math.max(0.35, surfaceWindKmh / 24)}
                           currentDate={effectiveDate}
                           isLiveMode={currentDate === 'LIVE'}
@@ -1991,7 +2070,7 @@ export default function App() {
               onAltitudeChange={setSurfaceAltitudeKm}
               sampleTerrainHeight={(x, z) => terrainSamplerRef.current(x, z)}
             />
-            (
+            {!liteMode && (
               <Suspense fallback={null}>
                 <LazyCinematicPostFX
                   quality={fxQuality}
@@ -1999,7 +2078,7 @@ export default function App() {
                   burstActive={impactBurstActive}
                 />
               </Suspense>
-            )
+            )}
           </Canvas>
         </SlateErrorBoundary>
       </div>
@@ -2070,6 +2149,30 @@ export default function App() {
                 title="Copy shareable snapshot URL"
               >
                 Share
+              </button>
+              <button
+                type="button"
+                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${liteMode ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                onClick={() => {
+                  setLiteMode((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setFxQuality('LOW');
+                    }
+                    return next;
+                  });
+                }}
+                title="Reduce GPU load"
+              >
+                Lite {liteMode ? 'On' : 'Off'}
+              </button>
+              <button
+                type="button"
+                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${relayEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                onClick={() => setRelayEnabled((prev) => !prev)}
+                title="Relay warning/critical alerts to configured webhook"
+              >
+                Relay {relayEnabled ? 'On' : 'Off'}
               </button>
               <div className="h-6 w-6 rounded-md border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
                 <Orbit size={13} />
@@ -2426,9 +2529,9 @@ export default function App() {
                             setSelectedTileId(tileId);
                             setActiveSubTileId(tileId);
                           }}
-                          className={`h-9 px-2 rounded border text-[8px] uppercase tracking-[0.14em] text-left ${activeSubTileId === tileId ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300/90 hover:bg-cyan-500/10'}`}
+                          className={`h-10 px-2 rounded border text-[8px] uppercase tracking-[0.14em] text-left ${activeSubTileId === tileId ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300/90 hover:bg-cyan-500/10'}`}
                         >
-                          <span className="line-clamp-2">{tileCatalog.find((tile) => tile.id === tileId)?.label ?? tileId}</span>
+                          <span className="line-clamp-2 skoll-menu-tile-label">{tileCatalog.find((tile) => tile.id === tileId)?.label ?? tileId}</span>
                         </button>
                       ))}
                     </div>
@@ -2657,6 +2760,9 @@ export default function App() {
 
       {!booted && (
         <div className="fixed inset-0 z-[110] pointer-events-auto">
+          {hasCriticalToast && (
+            <div className="pointer-events-none fixed inset-0 z-[118] skoll-critical-vignette" />
+          )}
           <NeuralBoot
             isLoaded={texturesLoaded && telemetry.kp !== undefined}
             onComplete={() => {

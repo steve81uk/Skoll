@@ -643,6 +643,35 @@ canvas {
   color: #FF3366;
 }
 
+.skoll-dock-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Consolas", monospace;
+  font-weight: 600;
+}
+
+.skoll-menu-tile-label {
+  display: block;
+  line-height: 1.1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.skoll-critical-vignette {
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 58%, rgba(255, 40, 40, 0.16) 100%);
+  animation: skollCriticalPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes skollCriticalPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.72; }
+}
+
 .app-top-bar,
 .time-explorer {
   inset-inline: 0;

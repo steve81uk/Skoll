@@ -67,6 +67,19 @@ const NOAA_PLASMA_URL = process.env.NOAA_API
   ?? 'https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json';
 const NOAA_MAG_URL =
   'https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json';
+const SOCIAL_RELAY_WEBHOOK = process.env.SOCIAL_RELAY_WEBHOOK ?? '';
+const NOAA_CO2_DAILY_URL =
+  'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv';
+const SIDC_SUNSPOT_URL =
+  'https://www.sidc.be/SILSO/INFO/snmtotcsv.php';
+const LASP_TSI_URL =
+  'https://lasp.colorado.edu/data/tsis/tsi-4.0_daily_data.txt';
+const OPEN_METEO_URL =
+  'https://api.open-meteo.com/v1/forecast';
+const OPEN_METEO_MARINE_URL =
+  'https://marine-api.open-meteo.com/v1/marine';
+const DATA_HUB_TTL_MS = 3 * 60_000;
+const AUTO_RELAY_ENABLED = (process.env.AUTO_RELAY_ENABLED ?? 'false').toLowerCase() === 'true';
 const EPHEMERIS_ARCHIVE_DIR = join(__dirname, 'data', 'ephemeris');
 const EPHEMERIS_ARCHIVE_FILE = join(EPHEMERIS_ARCHIVE_DIR, 'archive.jsonl');
 
@@ -110,6 +123,19 @@ const log = {
   error : (...a) =>                           console.error('[ERROR]', new Date().toISOString(), ...a),
 };
 
+const dataHubCache = {
+  ts: 0,
+  payload: null,
+};
+
+const relayCooldowns = new Map();
+const SERVER_ALERT_RULES = [
+  { id: 'kp-g1', check: (r) => r.kp >= 5, severity: 'warning', cooldownMin: 120, message: (r) => `Geomagnetic storm active (Kp ${r.kp.toFixed(1)})` },
+  { id: 'kp-g3', check: (r) => r.kp >= 7, severity: 'critical', cooldownMin: 60, message: (r) => `Severe geomagnetic storm (Kp ${r.kp.toFixed(1)})` },
+  { id: 'bz-south', check: (r) => r.bz <= -10, severity: 'warning', cooldownMin: 60, message: (r) => `Strong southward IMF Bz (${r.bz.toFixed(1)} nT)` },
+  { id: 'wind-fast', check: (r) => r.speed >= 700, severity: 'warning', cooldownMin: 90, message: (r) => `Fast solar wind (${Math.round(r.speed)} km/s)` },
+];
+
 function sendJson(res, status, payload) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
@@ -118,6 +144,212 @@ function sendJson(res, status, payload) {
     'Access-Control-Allow-Headers': 'Content-Type',
   });
   res.end(JSON.stringify(payload));
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString('utf-8');
+  return JSON.parse(raw || '{}');
+}
+
+async function forwardToSocialRelay(payload) {
+  if (!SOCIAL_RELAY_WEBHOOK) {
+    throw new Error('SOCIAL_RELAY_WEBHOOK is not configured');
+  }
+
+  const response = await fetch(SOCIAL_RELAY_WEBHOOK, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Relay webhook HTTP ${response.status}`);
+  }
+}
+
+async function evaluateServerAlertsAndRelay(reading) {
+  if (!AUTO_RELAY_ENABLED || !SOCIAL_RELAY_WEBHOOK) {
+    return;
+  }
+
+  const now = Date.now();
+  const alerts = [];
+
+  for (const rule of SERVER_ALERT_RULES) {
+    if (!rule.check(reading)) {
+      continue;
+    }
+    const last = relayCooldowns.get(rule.id) ?? 0;
+    const elapsedMin = (now - last) / 60000;
+    if (elapsedMin < rule.cooldownMin) {
+      continue;
+    }
+
+    relayCooldowns.set(rule.id, now);
+    alerts.push({
+      id: rule.id,
+      severity: rule.severity,
+      message: rule.message(reading),
+      ts: now,
+      value: reading.kp,
+    });
+  }
+
+  if (alerts.length === 0) {
+    return;
+  }
+
+  try {
+    await forwardToSocialRelay({
+      source: 'skoll-track-backend',
+      timestamp: new Date(now).toISOString(),
+      mode: 'headless-auto-relay',
+      reading,
+      alerts,
+    });
+    log.info(`Auto-relay sent ${alerts.length} alert(s) to configured webhook.`);
+  } catch (err) {
+    log.warn('Auto-relay failed:', String(err));
+  }
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 10000) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} for ${url}`);
+  }
+  return response.json();
+}
+
+async function fetchTextWithTimeout(url, timeoutMs = 10000) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} for ${url}`);
+  }
+  return response.text();
+}
+
+function parseLatestCo2Ppm(text) {
+  const row = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#') && /\d/.test(line))
+    .map((line) => line.split(','))
+    .filter((parts) => parts.length > 3)
+    .at(-1);
+
+  if (!row) return null;
+  const ppm = Number(row[3]);
+  return Number.isFinite(ppm) ? ppm : null;
+}
+
+function parseLatestSunspot(text) {
+  const row = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .at(-1);
+  if (!row) return null;
+  const parts = row.split(';').map((part) => part.trim());
+  const value = Number(parts[3]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseLatestTsi(text) {
+  const vals = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(';'))
+    .map((line) => line.split(/\s+/))
+    .filter((parts) => parts.length >= 2)
+    .map((parts) => Number(parts[1]))
+    .filter((value) => Number.isFinite(value));
+  return vals.length > 0 ? vals.at(-1) : null;
+}
+
+async function buildUnifiedDataHub(lat, lon) {
+  const [
+    forecastRes,
+    weatherRes,
+    marineRes,
+    co2Res,
+    sunspotRes,
+    tsiRes,
+  ] = await Promise.allSettled([
+    runInference(latestReading),
+    fetchJsonWithTimeout(`${OPEN_METEO_URL}?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lon))}&current=temperature_2m,wind_speed_10m,cloud_cover,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=UTC`, 10000),
+    fetchJsonWithTimeout(`${OPEN_METEO_MARINE_URL}?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lon))}&daily=sea_surface_temperature,wave_height_max&timezone=UTC`, 10000),
+    fetchTextWithTimeout(NOAA_CO2_DAILY_URL, 12000),
+    fetchTextWithTimeout(SIDC_SUNSPOT_URL, 12000),
+    fetchTextWithTimeout(LASP_TSI_URL, 12000),
+  ]);
+
+  const sourceErrors = {
+    forecast: forecastRes.status === 'rejected' ? String(forecastRes.reason) : null,
+    weather: weatherRes.status === 'rejected' ? String(weatherRes.reason) : null,
+    marine: marineRes.status === 'rejected' ? String(marineRes.reason) : null,
+    co2: co2Res.status === 'rejected' ? String(co2Res.reason) : null,
+    sunspot: sunspotRes.status === 'rejected' ? String(sunspotRes.reason) : null,
+    tsi: tsiRes.status === 'rejected' ? String(tsiRes.reason) : null,
+  };
+
+  const forecast = forecastRes.status === 'fulfilled' ? forecastRes.value : heuristicForecast(latestReading);
+  const weatherNow = weatherRes.status === 'fulfilled' ? weatherRes.value : null;
+  const marineNow = marineRes.status === 'fulfilled' ? marineRes.value : null;
+  const co2Ppm = co2Res.status === 'fulfilled' ? parseLatestCo2Ppm(co2Res.value) : null;
+  const sunspot = sunspotRes.status === 'fulfilled' ? parseLatestSunspot(sunspotRes.value) : null;
+  const tsi = tsiRes.status === 'fulfilled' ? parseLatestTsi(tsiRes.value) : null;
+  const oceanPhProxy = Number.isFinite(co2Ppm) ? 8.2 - (co2Ppm - 280) * 0.002 : null;
+
+  return {
+    ok: true,
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    location: { lat, lon },
+    sources: {
+      space: ['NOAA SWPC Plasma/Mag', 'Internal LSTM model'],
+      earth: ['Open-Meteo'],
+      weather: ['Open-Meteo'],
+      sea: ['Open-Meteo Marine'],
+      climate: ['NOAA GML CO2', 'SIDC SILSO', 'LASP TSIS'],
+    },
+    space: {
+      live: latestReading,
+      forecast,
+    },
+    earth: {
+      weatherCurrent: weatherNow?.current ?? null,
+      weatherDaily: weatherNow?.daily ?? null,
+    },
+    sea: {
+      marineDaily: marineNow?.daily ?? null,
+      oceanPhProxy,
+    },
+    climate: {
+      co2Ppm,
+      sunspot,
+      tsi,
+      forcingProxyWm2: Number.isFinite(co2Ppm) ? 5.35 * Math.log(co2Ppm / 278) : null,
+    },
+    sourceErrors,
+  };
+}
+
+async function getUnifiedDataHub(lat, lon, forceRefresh = false) {
+  const cacheValid = Date.now() - dataHubCache.ts < DATA_HUB_TTL_MS;
+  if (!forceRefresh && cacheValid && dataHubCache.payload) {
+    return { ...dataHubCache.payload, cache: 'hit' };
+  }
+
+  const payload = await buildUnifiedDataHub(lat, lon);
+  dataHubCache.ts = Date.now();
+  dataHubCache.payload = payload;
+  return { ...payload, cache: 'miss' };
 }
 
 function parseHorizonsVectorResult(resultText) {
@@ -400,6 +632,7 @@ async function fetchNOAAData() {
       kp:      latestReading.kp,
       ts:      new Date().toISOString(),
     };
+    await evaluateServerAlertsAndRelay(latestReading);
     log.debug('NOAA ok →', latestReading);
   } catch (err) {
     log.warn('NOAA fetch failed — retaining last reading:', err.message);
@@ -465,14 +698,43 @@ const httpServer = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && baseUrl.pathname === '/api/data-hub/snapshot') {
+    try {
+      const lat = Number(baseUrl.searchParams.get('lat') ?? '52.2');
+      const lon = Number(baseUrl.searchParams.get('lon') ?? '0.12');
+      const forceRefresh = baseUrl.searchParams.get('refresh') === '1';
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        sendJson(res, 400, { ok: false, error: 'Invalid lat/lon query params' });
+        return;
+      }
+
+      const payload = await getUnifiedDataHub(lat, lon, forceRefresh);
+      sendJson(res, 200, payload);
+    } catch (err) {
+      sendJson(res, 502, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && baseUrl.pathname === '/api/data-hub/sources') {
+    sendJson(res, 200, {
+      ok: true,
+      schemaVersion: 1,
+      sources: {
+        space: [NOAA_PLASMA_URL, NOAA_MAG_URL],
+        climate: [NOAA_CO2_DAILY_URL, SIDC_SUNSPOT_URL, LASP_TSI_URL],
+        weather: [OPEN_METEO_URL],
+        sea: [OPEN_METEO_MARINE_URL],
+      },
+      notes: 'Use /api/data-hub/snapshot?lat=<..>&lon=<..>&refresh=1 for a merged cleaned payload.',
+    });
+    return;
+  }
+
   if (req.method === 'POST' && baseUrl.pathname === '/api/ephemeris/archive') {
     try {
-      const chunks = [];
-      for await (const chunk of req) {
-        chunks.push(chunk);
-      }
-      const raw = Buffer.concat(chunks).toString('utf-8');
-      const payload = JSON.parse(raw || '{}');
+      const payload = await readJsonBody(req);
       mkdirSync(EPHEMERIS_ARCHIVE_DIR, { recursive: true });
       const envelope = {
         ts: new Date().toISOString(),
@@ -489,12 +751,7 @@ const httpServer = createServer(async (req, res) => {
 
   if (req.method === 'POST' && baseUrl.pathname === '/api/ephemeris/spice-ingest') {
     try {
-      const chunks = [];
-      for await (const chunk of req) {
-        chunks.push(chunk);
-      }
-      const raw = Buffer.concat(chunks).toString('utf-8');
-      const payload = JSON.parse(raw || '{}');
+      const payload = await readJsonBody(req);
       mkdirSync(EPHEMERIS_ARCHIVE_DIR, { recursive: true });
       const envelope = {
         ts: new Date().toISOString(),
@@ -506,6 +763,17 @@ const httpServer = createServer(async (req, res) => {
       sendJson(res, 200, { ok: true, file: EPHEMERIS_ARCHIVE_FILE });
     } catch (err) {
       sendJson(res, 400, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && baseUrl.pathname === '/api/alerts/social-relay') {
+    try {
+      const payload = await readJsonBody(req);
+      await forwardToSocialRelay(payload);
+      sendJson(res, 200, { ok: true, relayed: true });
+    } catch (err) {
+      sendJson(res, 502, { ok: false, error: String(err) });
     }
     return;
   }
