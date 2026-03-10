@@ -71,6 +71,14 @@ Import notes:
 Both templates assume your backend sends relay payloads to the automation webhook from:
 - `POST /api/alerts/social-relay`
 
+Direct X relay is also available from backend:
+- `POST /api/alerts/x-relay`
+- `POST /api/alerts/x-relay/test`
+
+Required env vars for direct X posting:
+- `X_RELAY_ENABLED=true`
+- `X_BEARER_TOKEN=...`
+
 Severity routing defaults:
 - X: all alerts.
 - Instagram + TikTok: critical alerts.

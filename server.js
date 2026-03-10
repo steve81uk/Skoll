@@ -68,6 +68,9 @@ const NOAA_PLASMA_URL = process.env.NOAA_API
 const NOAA_MAG_URL =
   'https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json';
 const SOCIAL_RELAY_WEBHOOK = process.env.SOCIAL_RELAY_WEBHOOK ?? '';
+const X_RELAY_ENABLED = (process.env.X_RELAY_ENABLED ?? 'false').toLowerCase() === 'true';
+const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN ?? '';
+const X_RELAY_DEFAULT_TAGS = process.env.X_RELAY_DEFAULT_TAGS ?? '#SpaceWeather #SkollTrack';
 const NOAA_CO2_DAILY_URL =
   'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv';
 const SIDC_SUNSPOT_URL =
@@ -203,6 +206,56 @@ async function forwardToSocialRelay(payload) {
   if (!response.ok) {
     throw new Error(`Relay webhook HTTP ${response.status}`);
   }
+}
+
+function buildXRelayText(payload) {
+  if (typeof payload?.text === 'string' && payload.text.trim().length > 0) {
+    return payload.text.trim().slice(0, 280);
+  }
+
+  const reading = payload?.reading ?? {};
+  const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
+  const primary = alerts[0];
+  const message = typeof primary?.message === 'string' ? primary.message : 'Telemetry broadcast';
+  const kp = Number.isFinite(reading.kp) ? Number(reading.kp).toFixed(1) : 'n/a';
+  const bz = Number.isFinite(reading.bz) ? Number(reading.bz).toFixed(1) : 'n/a';
+  const speed = Number.isFinite(reading.speed) ? Math.round(Number(reading.speed)).toString() : 'n/a';
+  const raw = `SKOLL ALERT | ${message} | Kp ${kp} | Bz ${bz} nT | Vsw ${speed} km/s ${X_RELAY_DEFAULT_TAGS}`;
+  return raw.slice(0, 280);
+}
+
+async function forwardToXRelay(payload) {
+  if (!X_RELAY_ENABLED) {
+    throw new Error('X relay disabled (set X_RELAY_ENABLED=true)');
+  }
+  if (!X_BEARER_TOKEN) {
+    throw new Error('X_BEARER_TOKEN is not configured');
+  }
+
+  const text = buildXRelayText(payload);
+  const response = await fetch('https://api.x.com/2/tweets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${X_BEARER_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text }),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`X relay HTTP ${response.status}: ${responseText.slice(0, 300)}`);
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    parsed = { raw: responseText };
+  }
+
+  return { text, result: parsed };
 }
 
 async function evaluateServerAlertsAndRelay(reading) {
@@ -909,6 +962,42 @@ const httpServer = createServer(async (req, res) => {
       const payload = await readJsonBody(req);
       await forwardToSocialRelay(payload);
       sendJson(res, 200, { ok: true, relayed: true });
+    } catch (err) {
+      sendJson(res, 502, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && baseUrl.pathname === '/api/alerts/x-relay') {
+    try {
+      const payload = await readJsonBody(req);
+      const result = await forwardToXRelay(payload);
+      sendJson(res, 200, { ok: true, posted: true, ...result });
+    } catch (err) {
+      sendJson(res, 502, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && baseUrl.pathname === '/api/alerts/x-relay/test') {
+    try {
+      const payload = await readJsonBody(req);
+      const syntheticPayload = {
+        source: 'skoll-track-backend',
+        timestamp: new Date().toISOString(),
+        reading: latestReading,
+        alerts: payload?.alerts ?? [
+          {
+            id: 'x-relay-test',
+            severity: 'warning',
+            message: payload?.message ?? 'X relay test packet from SKOLL backend',
+            ts: Date.now(),
+            value: latestReading.kp,
+          },
+        ],
+      };
+      const result = await forwardToXRelay(syntheticPayload);
+      sendJson(res, 200, { ok: true, posted: true, syntheticPayload, ...result });
     } catch (err) {
       sendJson(res, 502, { ok: false, error: String(err) });
     }
