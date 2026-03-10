@@ -1,0 +1,263 @@
+{
+  "name": "Skoll Social Relay Router",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "skoll-social-relay",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "Webhook_Trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst alerts = Array.isArray(body.alerts) ? body.alerts : [];\nconst severity = alerts.some((a) => a.severity === 'critical') ? 'critical' : (alerts[0]?.severity ?? 'info');\nconst reading = body.reading ?? {};\nconst title = severity === 'critical' ? 'SKOLL Critical Space Weather Alert' : 'SKOLL Space Weather Update';\nconst message = `${title} | Kp ${Number(reading.kp ?? 0).toFixed(1)} | Bz ${Number(reading.bz ?? 0).toFixed(1)} nT | Vsw ${Math.round(Number(reading.speed ?? 0))} km/s`;\nreturn [{ json: { relay: body, severity, title, message } }];"
+      },
+      "id": "Normalize_Payload",
+      "name": "Normalize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.severity}}",
+              "operation": "equal",
+              "value2": "critical"
+            }
+          ]
+        }
+      },
+      "id": "Critical_Check",
+      "name": "Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://api.x.com/2/tweets",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.X_BEARER_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "Post_X",
+      "name": "Post X",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [960, 220]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v20.0/{{$env.IG_BUSINESS_ID}}/media",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "caption",
+              "value": "={{$json.message}}"
+            },
+            {
+              "name": "image_url",
+              "value": "={{$json.relay?.imageUrl || $env.DEFAULT_ALERT_IMAGE_URL}}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{$env.IG_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "Create_IG_Media",
+      "name": "Create IG Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [960, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.TIKTOK_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "post_info",
+              "value": "={{ { title: $json.title, privacy_level: 'PUBLIC_TO_EVERYONE' } }}"
+            },
+            {
+              "name": "source_info",
+              "value": "={{ { source: 'PULL_FROM_URL', video_url: $json.relay?.videoUrl || $env.DEFAULT_ALERT_VIDEO_URL } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "Post_TikTok",
+      "name": "Post TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [960, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, severity: $json.severity, routedAt: $now } }}"
+      },
+      "id": "Webhook_Response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1220, 320]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "Critical?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Critical?": {
+      "main": [
+        [
+          {
+            "node": "Post X",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create IG Media",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post X",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post X": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IG Media": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post TikTok": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "skoll-relay-template"
+  },
+  "versionId": "1"
+}

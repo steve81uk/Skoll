@@ -57,3 +57,20 @@ Cheapest practical route is:
 
 - Backend relay uses cooldown logic to reduce spam.
 - Keep webhook secrets out of git; store in env/secret managers.
+
+## 7. Import-Ready Templates
+
+Template files added:
+- `docs/workflows/n8n-skoll-social-relay.json`
+- `docs/workflows/make-skoll-social-relay.json`
+
+Import notes:
+- n8n: `Workflows -> Import from file`.
+- Make: `Scenarios -> Import Blueprint`.
+
+Both templates assume your backend sends relay payloads to the automation webhook from:
+- `POST /api/alerts/social-relay`
+
+Severity routing defaults:
+- X: all alerts.
+- Instagram + TikTok: critical alerts.

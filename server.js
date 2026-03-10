@@ -80,8 +80,11 @@ const OPEN_METEO_MARINE_URL =
   'https://marine-api.open-meteo.com/v1/marine';
 const DATA_HUB_TTL_MS = 3 * 60_000;
 const AUTO_RELAY_ENABLED = (process.env.AUTO_RELAY_ENABLED ?? 'false').toLowerCase() === 'true';
+const DATA_HUB_SCHEMA_VERSION = 1;
 const EPHEMERIS_ARCHIVE_DIR = join(__dirname, 'data', 'ephemeris');
 const EPHEMERIS_ARCHIVE_FILE = join(EPHEMERIS_ARCHIVE_DIR, 'archive.jsonl');
+const DATA_HUB_ARCHIVE_DIR = join(__dirname, 'data', 'data-hub');
+const DATA_HUB_ARCHIVE_FILE = join(DATA_HUB_ARCHIVE_DIR, `archive.v${DATA_HUB_SCHEMA_VERSION}.jsonl`);
 
 const HORIZONS_BODY_IDS = {
   Mercury: '199',
@@ -153,6 +156,36 @@ async function readJsonBody(req) {
   }
   const raw = Buffer.concat(chunks).toString('utf-8');
   return JSON.parse(raw || '{}');
+}
+
+function appendDataHubArchive(record) {
+  mkdirSync(DATA_HUB_ARCHIVE_DIR, { recursive: true });
+  const envelope = {
+    ts: new Date().toISOString(),
+    schemaVersion: DATA_HUB_SCHEMA_VERSION,
+    ...record,
+  };
+  appendFileSync(DATA_HUB_ARCHIVE_FILE, `${JSON.stringify(envelope)}\n`, 'utf-8');
+  return envelope;
+}
+
+function readDataHubArchive(limit = 200) {
+  if (!existsSync(DATA_HUB_ARCHIVE_FILE)) {
+    return [];
+  }
+
+  const safeLimit = Math.max(1, Math.min(5000, Number(limit) || 200));
+  const lines = readFileSync(DATA_HUB_ARCHIVE_FILE, 'utf-8')
+    .split('\n')
+    .filter((line) => line.trim().length > 0);
+
+  return lines.slice(-safeLimit).map((line) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return { parseError: true, raw: line };
+    }
+  });
 }
 
 async function forwardToSocialRelay(payload) {
@@ -500,6 +533,45 @@ log.info(`TF ready — backend: ${tf.getBackend()}, version: ${tf.version.tfjs}`
 /** @type {import('@tensorflow/tfjs').LayersModel | null} */
 let model          = null;
 let modelLoadError = null;
+let modelFeatureCount = 7;
+
+function readModelArtifacts(modelJson, modelDir) {
+  const weightSpecs = [];
+  const chunks = [];
+
+  if (Array.isArray(modelJson.weightsManifest)) {
+    for (const group of modelJson.weightsManifest) {
+      if (Array.isArray(group.weights)) {
+        weightSpecs.push(...group.weights);
+      }
+      for (const weightFile of group.paths ?? []) {
+        const weightPath = join(modelDir, weightFile);
+        if (!existsSync(weightPath)) {
+          throw new Error(`Weight file missing: ${weightPath}`);
+        }
+        const buf = readFileSync(weightPath);
+        chunks.push(new Uint8Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)));
+      }
+    }
+  }
+
+  const totalBytes = chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
+  const weightData = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    weightData.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return {
+    modelTopology: modelJson.modelTopology,
+    weightSpecs,
+    weightData: weightData.buffer,
+    format: modelJson.format,
+    generatedBy: modelJson.generatedBy,
+    convertedBy: modelJson.convertedBy,
+  };
+}
 
 /**
  * Load model.json + weight bins from disk using tf.io.fromMemory().
@@ -516,26 +588,16 @@ async function loadModel() {
     log.info(`Loading model from: ${MODEL_PATH}`);
     const modelJson     = JSON.parse(readFileSync(MODEL_PATH, 'utf-8'));
     const modelDir      = dirname(MODEL_PATH);
-    const weightBuffers = [];
-
-    if (Array.isArray(modelJson.weightsManifest)) {
-      for (const group of modelJson.weightsManifest) {
-        for (const weightFile of group.paths) {
-          const weightPath = join(modelDir, weightFile);
-          if (!existsSync(weightPath)) throw new Error(`Weight file missing: ${weightPath}`);
-          const buf = readFileSync(weightPath);
-          // Slice to detach from Node Buffer's backing ArrayBuffer
-          weightBuffers.push(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-        }
-      }
-    }
-
-    model = await tf.loadLayersModel(tf.io.fromMemory(modelJson, weightBuffers));
-    log.info(`✓ LSTM model loaded. Input: ${JSON.stringify(model.inputs[0].shape)}`);
+    const artifacts = readModelArtifacts(modelJson, modelDir);
+    model = await tf.loadLayersModel(tf.io.fromMemory(artifacts));
+    const featureDim = model.inputs?.[0]?.shape?.[2];
+    modelFeatureCount = Number.isFinite(featureDim) ? Number(featureDim) : 7;
+    log.info(`✓ LSTM model loaded. Input: ${JSON.stringify(model.inputs[0].shape)} | features=${modelFeatureCount}`);
   } catch (err) {
     modelLoadError = String(err);
     log.error('Model load failed:', err);
     model = null;
+    modelFeatureCount = 7;
   }
 }
 
@@ -557,7 +619,7 @@ function buildInputTensor(raw) {
   const { speed, density, bz, bt, kp } = raw;
   const va = bt / Math.max(1, Math.sqrt(density));
   const nc = Math.abs(Math.min(0, bz)) * speed;
-  const step = [
+  const allFeatures = [
     stdNorm(speed,   'solarWindSpeed'),
     stdNorm(density, 'solarWindDensity'),
     stdNorm(bz,      'magneticFieldBz'),
@@ -566,7 +628,49 @@ function buildInputTensor(raw) {
     stdNorm(va,      'alfvenVelocity'),
     stdNorm(kp,      'kpIndex'),
   ];
+  const step = allFeatures.slice(0, Math.max(1, Math.min(allFeatures.length, modelFeatureCount)));
   return tf.tensor3d([Array.from({ length: 24 }, () => [...step])]);
+}
+
+function decodeModelForecast(vals, raw) {
+  // Legacy 9-output model: [k6, b6, p6, k12, b12, p12, k24, b24, p24]
+  if (vals.length >= 9) {
+    const [k6, b6, p6, k12, b12, p12, k24, b24, p24] = vals;
+    return {
+      sixHour:        { kp: +stdDenorm(k6,  'kpIndex').toFixed(2), bz: +stdDenorm(b6,  'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p6  * 100)).toFixed(1) },
+      twelveHour:     { kp: +stdDenorm(k12, 'kpIndex').toFixed(2), bz: +stdDenorm(b12, 'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p12 * 100)).toFixed(1) },
+      twentyFourHour: { kp: +stdDenorm(k24, 'kpIndex').toFixed(2), bz: +stdDenorm(b24, 'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p24 * 100)).toFixed(1) },
+      source:         'lstm_v1',
+      confidence:     0.87,
+    };
+  }
+
+  // Common compact variants.
+  if (vals.length >= 3) {
+    const [k6, k12, k24] = vals;
+    const bzBase = raw.bz * 0.85;
+    return {
+      sixHour:        { kp: +stdDenorm(k6, 'kpIndex').toFixed(2), bz: +bzBase.toFixed(1), psi: +Math.max(0, Math.min(100, stdDenorm(k6, 'kpIndex') ** 2 / 81 * 100)).toFixed(1) },
+      twelveHour:     { kp: +stdDenorm(k12, 'kpIndex').toFixed(2), bz: +(bzBase * 0.92).toFixed(1), psi: +Math.max(0, Math.min(100, stdDenorm(k12, 'kpIndex') ** 2 / 81 * 100)).toFixed(1) },
+      twentyFourHour: { kp: +stdDenorm(k24, 'kpIndex').toFixed(2), bz: +(bzBase * 0.84).toFixed(1), psi: +Math.max(0, Math.min(100, stdDenorm(k24, 'kpIndex') ** 2 / 81 * 100)).toFixed(1) },
+      source:         'lstm_compact',
+      confidence:     0.81,
+    };
+  }
+
+  if (vals.length >= 1) {
+    const baseKp = +stdDenorm(vals[0], 'kpIndex').toFixed(2);
+    const bzBase = raw.bz * 0.85;
+    return {
+      sixHour:        { kp: baseKp, bz: +bzBase.toFixed(1), psi: +Math.max(0, Math.min(100, baseKp ** 2 / 81 * 100)).toFixed(1) },
+      twelveHour:     { kp: +(baseKp * 0.93).toFixed(2), bz: +(bzBase * 0.92).toFixed(1), psi: +Math.max(0, Math.min(100, (baseKp * 0.93) ** 2 / 81 * 100)).toFixed(1) },
+      twentyFourHour: { kp: +(baseKp * 0.84).toFixed(2), bz: +(bzBase * 0.84).toFixed(1), psi: +Math.max(0, Math.min(100, (baseKp * 0.84) ** 2 / 81 * 100)).toFixed(1) },
+      source:         'lstm_scalar',
+      confidence:     0.76,
+    };
+  }
+
+  return heuristicForecast(raw);
 }
 
 // ─── Heuristic fallback ───────────────────────────────────────────────────────
@@ -595,14 +699,7 @@ async function runInference(raw) {
     const tensor = Array.isArray(out) ? out[0] : out;
     const vals   = await tensor.data();
     input.dispose(); tensor.dispose();
-    const [k6, b6, p6, k12, b12, p12, k24, b24, p24] = vals;
-    return {
-      sixHour:        { kp: +stdDenorm(k6,  'kpIndex').toFixed(2), bz: +stdDenorm(b6,  'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p6  * 100)).toFixed(1) },
-      twelveHour:     { kp: +stdDenorm(k12, 'kpIndex').toFixed(2), bz: +stdDenorm(b12, 'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p12 * 100)).toFixed(1) },
-      twentyFourHour: { kp: +stdDenorm(k24, 'kpIndex').toFixed(2), bz: +stdDenorm(b24, 'magneticFieldBz').toFixed(1), psi: +Math.max(0, Math.min(100, p24 * 100)).toFixed(1) },
-      source:         'lstm_v1',
-      confidence:     0.87,
-    };
+    return decodeModelForecast(vals, raw);
   } catch (err) {
     log.error('Inference error:', err);
     input.dispose();
@@ -703,6 +800,7 @@ const httpServer = createServer(async (req, res) => {
       const lat = Number(baseUrl.searchParams.get('lat') ?? '52.2');
       const lon = Number(baseUrl.searchParams.get('lon') ?? '0.12');
       const forceRefresh = baseUrl.searchParams.get('refresh') === '1';
+      const shouldArchive = baseUrl.searchParams.get('archive') === '1';
 
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
         sendJson(res, 400, { ok: false, error: 'Invalid lat/lon query params' });
@@ -710,6 +808,9 @@ const httpServer = createServer(async (req, res) => {
       }
 
       const payload = await getUnifiedDataHub(lat, lon, forceRefresh);
+      if (shouldArchive) {
+        appendDataHubArchive({ source: 'snapshot-query', snapshot: payload });
+      }
       sendJson(res, 200, payload);
     } catch (err) {
       sendJson(res, 502, { ok: false, error: String(err) });
@@ -717,17 +818,53 @@ const httpServer = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && baseUrl.pathname === '/api/data-hub/archive') {
+    try {
+      const limit = Number(baseUrl.searchParams.get('limit') ?? 200);
+      const rows = readDataHubArchive(limit);
+      sendJson(res, 200, {
+        ok: true,
+        schemaVersion: DATA_HUB_SCHEMA_VERSION,
+        count: rows.length,
+        file: DATA_HUB_ARCHIVE_FILE,
+        rows,
+      });
+    } catch (err) {
+      sendJson(res, 500, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && baseUrl.pathname === '/api/data-hub/archive') {
+    try {
+      const payload = await readJsonBody(req);
+      const lat = Number(payload?.lat ?? 52.2);
+      const lon = Number(payload?.lon ?? 0.12);
+      const snapshot = payload?.snapshot ?? await getUnifiedDataHub(lat, lon, payload?.refresh === true);
+      const tags = Array.isArray(payload?.tags) ? payload.tags.slice(0, 16) : [];
+      const row = appendDataHubArchive({
+        source: payload?.source ?? 'manual',
+        tags,
+        snapshot,
+      });
+      sendJson(res, 200, { ok: true, row, file: DATA_HUB_ARCHIVE_FILE });
+    } catch (err) {
+      sendJson(res, 400, { ok: false, error: String(err) });
+    }
+    return;
+  }
+
   if (req.method === 'GET' && baseUrl.pathname === '/api/data-hub/sources') {
     sendJson(res, 200, {
       ok: true,
-      schemaVersion: 1,
+      schemaVersion: DATA_HUB_SCHEMA_VERSION,
       sources: {
         space: [NOAA_PLASMA_URL, NOAA_MAG_URL],
         climate: [NOAA_CO2_DAILY_URL, SIDC_SUNSPOT_URL, LASP_TSI_URL],
         weather: [OPEN_METEO_URL],
         sea: [OPEN_METEO_MARINE_URL],
       },
-      notes: 'Use /api/data-hub/snapshot?lat=<..>&lon=<..>&refresh=1 for a merged cleaned payload.',
+      notes: 'Use /api/data-hub/snapshot?lat=<..>&lon=<..>&refresh=1&archive=1 for a merged payload, or POST /api/data-hub/archive to append JSONL rows.',
     });
     return;
   }

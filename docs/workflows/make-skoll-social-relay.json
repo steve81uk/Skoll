@@ -1,0 +1,90 @@
+{
+  "name": "Skoll Social Relay Router",
+  "metadata": {
+    "version": 1,
+    "scenario": "importable-blueprint",
+    "description": "Routes SKOLL relay payload to X, Instagram, and TikTok using severity-based branches."
+  },
+  "trigger": {
+    "module": "webhooks:customWebhook",
+    "name": "Skoll Relay Webhook",
+    "settings": {
+      "method": "POST",
+      "path": "skoll-social-relay"
+    }
+  },
+  "variables": [
+    { "name": "X_BEARER_TOKEN", "required": true },
+    { "name": "IG_ACCESS_TOKEN", "required": true },
+    { "name": "IG_BUSINESS_ID", "required": true },
+    { "name": "TIKTOK_ACCESS_TOKEN", "required": true },
+    { "name": "DEFAULT_ALERT_IMAGE_URL", "required": false },
+    { "name": "DEFAULT_ALERT_VIDEO_URL", "required": false }
+  ],
+  "flow": [
+    {
+      "id": "normalize",
+      "module": "tools:setVariables",
+      "map": {
+        "severity": "{{if(contains(map(1.alerts; \"severity\"); \"critical\"); \"critical\"; if(empty(1.alerts[1].severity); \"info\"; 1.alerts[1].severity))}}",
+        "message": "{{concat('SKOLL | Kp ', formatNumber(1.reading.kp; 1); ' | Bz ', formatNumber(1.reading.bz; 1); ' nT | Vsw ', formatNumber(1.reading.speed; 0), ' km/s')}}"
+      }
+    },
+    {
+      "id": "post_x",
+      "module": "http:makeRequest",
+      "map": {
+        "url": "https://api.x.com/2/tweets",
+        "method": "POST",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer {{X_BEARER_TOKEN}}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "body": "{\"text\":\"{{2.message}}\"}"
+      }
+    },
+    {
+      "id": "critical_router",
+      "module": "flow:router",
+      "routes": [
+        {
+          "name": "critical",
+          "filter": "{{2.severity = \"critical\"}}",
+          "steps": [
+            {
+              "id": "post_instagram",
+              "module": "http:makeRequest",
+              "map": {
+                "url": "https://graph.facebook.com/v20.0/{{IG_BUSINESS_ID}}/media",
+                "method": "POST",
+                "query": [
+                  { "name": "caption", "value": "{{2.message}}" },
+                  { "name": "image_url", "value": "{{if(empty(1.imageUrl); DEFAULT_ALERT_IMAGE_URL; 1.imageUrl)}}" },
+                  { "name": "access_token", "value": "{{IG_ACCESS_TOKEN}}" }
+                ]
+              }
+            },
+            {
+              "id": "post_tiktok",
+              "module": "http:makeRequest",
+              "map": {
+                "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+                "method": "POST",
+                "headers": [
+                  { "name": "Authorization", "value": "Bearer {{TIKTOK_ACCESS_TOKEN}}" },
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "body": "{\"post_info\":{\"title\":\"SKOLL Critical Space Weather Alert\",\"privacy_level\":\"PUBLIC_TO_EVERYONE\"},\"source_info\":{\"source\":\"PULL_FROM_URL\",\"video_url\":\"{{if(empty(1.videoUrl); DEFAULT_ALERT_VIDEO_URL; 1.videoUrl)}}\"}}"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Import this file using Make > Scenarios > Import Blueprint.",
+    "Set webhook URL as SOCIAL_RELAY_WEBHOOK in backend env.",
+    "The scenario always posts to X; Instagram and TikTok are gated to critical severity."
+  ]
+}
