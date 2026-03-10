@@ -68,6 +68,8 @@ function toJsonl(payload: unknown): string {
 }
 
 function fetchBaseUrl() {
+  const backendBase = import.meta.env.VITE_BACKEND_HTTP_BASE?.trim();
+  if (backendBase) return backendBase.replace(/\/$/, '');
   const apiBase = import.meta.env.VITE_EPHEMERIS_API_BASE?.trim();
   if (apiBase) return apiBase.replace(/\/$/, '');
   return 'http://localhost:8080';

@@ -94,6 +94,8 @@ type TimelineContextMenu = { x: number; y: number } | null;
 type EarthLodStage = 'SPACE' | 'ORBIT' | 'REGIONAL' | 'LOCAL';
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
 const TIME_EXPLORER_BASE_HEIGHT = 132;
+const BACKEND_HTTP_BASE = (import.meta.env.VITE_BACKEND_HTTP_BASE ?? import.meta.env.VITE_EPHEMERIS_API_BASE ?? 'http://localhost:8080').replace(/\/$/, '');
+const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL ?? BACKEND_HTTP_BASE.replace(/^http/i, 'ws');
 
 const LazyPlanetRenderer = lazy(() => import('./components/PlanetRenderer').then((module) => ({ default: module.PlanetRenderer })));
 const LazyCMEPropagationVisualizer = lazy(() =>
@@ -310,7 +312,7 @@ const EarthZoomLadderController = ({
       camera.updateProjectionMatrix();
     }
 
-    if (viewMode === 'HELIOCENTRIC' && distance < 3.2) {
+    if (viewMode === 'HELIOCENTRIC' && distance < 0.7) {
       const now = performance.now();
       if (now - lastSurfaceReqRef.current > 1500) {
         lastSurfaceReqRef.current = now;
@@ -1365,7 +1367,7 @@ export default function App() {
         );
       case 'terminal-log':
         return (
-          <TerminalLogHUD visible wsUrl="ws://localhost:8080" />
+          <TerminalLogHUD visible wsUrl={BACKEND_WS_URL} />
         );
       case 'earth-dynamo':
         return (
@@ -1780,6 +1782,64 @@ export default function App() {
 
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
   const hasCriticalToast = toasts.some((toast) => toast.severity === 'critical');
+  const isEarthOrbitalView = currentPlanet === 'Earth' && viewMode !== 'SURFACE';
+
+  const shouldRenderEarthBowShock = useMemo(() => {
+    if (!isEarthOrbitalView || liteMode) {
+      return false;
+    }
+
+    // Best signal when Earth is still mostly in-frame; fades out for extreme close-ups.
+    return earthLodStage === 'SPACE' || earthZoomDistance >= 1.1;
+  }, [isEarthOrbitalView, liteMode, earthLodStage, earthZoomDistance]);
+
+  const shouldRenderEarthCloudLayer = useMemo(() => {
+    if (!isEarthOrbitalView || !weatherVisibility.cloud) {
+      return false;
+    }
+
+    // Cloud shell is useful from orbital/regional distances, not deep local zoom.
+    return earthLodStage !== 'SPACE' && earthZoomDistance <= 7.5;
+  }, [isEarthOrbitalView, weatherVisibility.cloud, earthLodStage, earthZoomDistance]);
+
+  const shouldRenderEarthWeatherLayers = useMemo(() => {
+    if (!isEarthOrbitalView || liteMode) {
+      return false;
+    }
+
+    if (!weatherVisibility.precip && !weatherVisibility.snow && !weatherVisibility.wind) {
+      return false;
+    }
+
+    // OWM overlays are texture-heavy, keep them to meaningful close-orbit inspections.
+    return (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL') && earthZoomDistance <= 2.8;
+  }, [isEarthOrbitalView, liteMode, weatherVisibility.precip, weatherVisibility.snow, weatherVisibility.wind, earthLodStage, earthZoomDistance]);
+
+  const shouldRenderEarthWindStreamlines = useMemo(() => {
+    if (!isEarthOrbitalView || liteMode || !weatherVisibility.stream) {
+      return false;
+    }
+
+    // CPU-updated streamline trails are the heaviest weather overlay; render only at local pass.
+    return earthLodStage === 'LOCAL' && earthZoomDistance <= 1.35;
+  }, [isEarthOrbitalView, liteMode, weatherVisibility.stream, earthLodStage, earthZoomDistance]);
+
+  const shouldRenderEarthCoreDynamo = useMemo(() => {
+    if (currentPlanet !== 'Earth' || viewMode === 'SURFACE') {
+      return false;
+    }
+
+    // Interior assets stay unmounted until inspection zoom to avoid hidden overdraw/flicker.
+    if (cutawayEnabled) {
+      return earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL';
+    }
+
+    if (liteMode) {
+      return false;
+    }
+
+    return earthLodStage === 'LOCAL' && earthZoomDistance <= 0.42;
+  }, [currentPlanet, viewMode, cutawayEnabled, earthLodStage, earthZoomDistance, liteMode]);
 
   const applyResolvedVectors = useCallback((vectors: EphemerisVectorAU[]) => {
     const next: Record<string, EphemerisVectorAU> = {};
@@ -1802,7 +1862,7 @@ export default function App() {
         const paramsDate = encodeURIComponent(effectiveDate.toISOString());
         const responses = await Promise.all(
           bodies.map(async (body) => {
-            const url = `http://localhost:8080/api/ephemeris/horizons?body=${encodeURIComponent(body)}&date=${paramsDate}`;
+            const url = `${BACKEND_HTTP_BASE}/api/ephemeris/horizons?body=${encodeURIComponent(body)}&date=${paramsDate}`;
             const response = await fetch(url);
             if (!response.ok) {
               throw new Error(`Horizons API ${response.status} for ${body}`);
@@ -1986,18 +2046,20 @@ export default function App() {
                     const posArr: [number, number, number] = [pos.x, pos.y, pos.z];
                     return (
                       <>
-                        <EarthBowShock
-                          earthPos={pos}
-                          cmeActive={cmeActive || cmeImpactActive}
-                          kpIndex={telemetry.kpIndex ?? 0}
-                          sunDirection={new THREE.Vector3(1, 0, 0)}
-                          solarWindDensity={syntheticCME?.density ?? noaaDonki.bundle?.density ?? 5}
-                          solarWindSpeed={syntheticCME?.speed ?? noaaDonki.bundle?.speed ?? 450}
-                        />
+                        {shouldRenderEarthBowShock && (
+                          <EarthBowShock
+                            earthPos={pos}
+                            cmeActive={cmeActive || cmeImpactActive}
+                            kpIndex={telemetry.kpIndex ?? 0}
+                            sunDirection={new THREE.Vector3(1, 0, 0)}
+                            solarWindDensity={syntheticCME?.density ?? noaaDonki.bundle?.density ?? 5}
+                            solarWindSpeed={syntheticCME?.speed ?? noaaDonki.bundle?.speed ?? 450}
+                          />
+                        )}
                         {/* Live cloud layer on Earth */}
                         <EarthCloudLayer
                           earthPos={pos}
-                          visible={weatherVisibility.cloud}
+                          visible={shouldRenderEarthCloudLayer}
                           owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
                           opacity={weatherOpacity.cloud}
                           currentDate={effectiveDate}
@@ -2005,7 +2067,7 @@ export default function App() {
                         />
                         <EarthWeatherLayers
                           earthPos={pos}
-                          visible={!liteMode}
+                          visible={shouldRenderEarthWeatherLayers}
                           owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
                           opacityPrecip={weatherOpacity.precip}
                           opacitySnow={weatherOpacity.snow}
@@ -2018,7 +2080,7 @@ export default function App() {
                         />
                         <EarthWindStreamlines
                           earthPos={pos}
-                          visible={!liteMode && weatherVisibility.stream}
+                          visible={shouldRenderEarthWindStreamlines}
                           opacity={weatherOpacity.stream}
                           streamCount={liteMode ? 60 : earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
                           speedScale={Math.max(0.35, surfaceWindKmh / 24)}
@@ -2048,7 +2110,7 @@ export default function App() {
                         {/* Earth Core Dynamo — inner / outer core + dipole field lines */}
                         <EarthCoreDynamo
                           earthPos={posArr}
-                          visible={currentPlanet === 'Earth'}
+                          visible={shouldRenderEarthCoreDynamo}
                           kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 2}
                         />
                         {/* D-RAP Radio Blackout Heatmap — driven by live GOES X-ray flux */}
@@ -2064,7 +2126,7 @@ export default function App() {
               )}
             </Suspense>
 
-            <OrbitControls enablePan enableZoom enableDamping dampingFactor={0.08} makeDefault minDistance={0.005} maxDistance={100000} maxPolarAngle={viewMode === 'SURFACE' ? Math.PI / 1.95 : Math.PI} />
+            <OrbitControls enablePan enableZoom enableDamping dampingFactor={0.08} makeDefault minDistance={0.001} maxDistance={100000} maxPolarAngle={viewMode === 'SURFACE' ? Math.PI / 1.95 : Math.PI} />
             <SurfaceCameraController
               enabled={viewMode === 'SURFACE'}
               onAltitudeChange={setSurfaceAltitudeKm}

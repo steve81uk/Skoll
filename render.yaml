@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: skoll-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: FETCH_INTERVAL_MS
+        value: 60000
+      - key: LOG_LEVEL
+        value: info
+      - key: AUTO_RELAY_ENABLED
+        value: "false"
+      - key: X_RELAY_ENABLED
+        value: "false"
