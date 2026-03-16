@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, extend } from '@react-three/fiber';
 import { shaderMaterial } from '@react-three/drei';
 import * as THREE from 'three';
@@ -177,11 +177,20 @@ export interface HeliopauseShellProps {
 export default function HeliopauseShell({ visible = true }: HeliopauseShellProps) {
   const tsRef  = useRef<THREE.ShaderMaterial & { uTime: number; uOpacity: number }>(null);
   const hpRef  = useRef<THREE.ShaderMaterial & { uTime: number; uOpacity: number }>(null);
+  const groupRef = useRef<THREE.Group>(null!);
+  const frameCountRef = useRef(0);
 
   const tsGeo = useMemo(() => new THREE.SphereGeometry(1_600, 48, 48), []);
   const hpGeo = useMemo(() => new THREE.SphereGeometry(2_400, 48, 48), []);
 
+  // These shells never move — disable automatic matrix recomputation.
+  useEffect(() => {
+    if (groupRef.current) groupRef.current.matrixAutoUpdate = false;
+  }, []);
+
+  // Shader uTime only needs ~15fps resolution on an imperceptibly-slow drift.
   useFrame(({ clock }) => {
+    if (++frameCountRef.current % 4 !== 0) return;
     const t = clock.getElapsedTime();
     if (tsRef.current) tsRef.current.uTime = t;
     if (hpRef.current) hpRef.current.uTime = t;
@@ -190,7 +199,7 @@ export default function HeliopauseShell({ visible = true }: HeliopauseShellProps
   if (!visible) return null;
 
   return (
-    <group>
+    <group ref={groupRef}>
       {/* Termination shock — inner boundary */}
       <mesh geometry={tsGeo}>
         <terminationShockMaterial

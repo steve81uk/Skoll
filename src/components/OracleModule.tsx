@@ -5,6 +5,8 @@ import { getRecentMajorSolarEvents } from '../ml/PredictiveEngine';
 import { useNeuralOracle } from '../hooks/useNeuralOracle';
 import type { HazardTelemetryModel } from '../services/hazardModel';
 import type { ForecastAlert } from '../ml/types';
+import { PanelDescription } from './PanelDescription';
+import { kpAriaLabel, bzAriaLabel, solarWindAriaLabel, flareAriaLabel } from '../lib/a11y';
 
 interface OracleModuleProps {
   snapshot: HazardTelemetryModel;
@@ -80,9 +82,20 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
       className="bg-black/40 backdrop-blur-xl border border-cyan-500/30 p-4 rounded-lg font-mono"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div>
-          <div className="text-[10px] text-cyan-500 tracking-[0.2em] uppercase">Neural Oracle</div>
-          <h3 className="text-sm text-white uppercase tracking-wide">Live Hazard Interpreter</h3>
+        <div className="flex items-center gap-2">
+          <div>
+            <div className="text-[10px] text-cyan-500 tracking-[0.2em] uppercase">Neural Oracle</div>
+            <h3 className="text-sm text-white uppercase tracking-wide">Live Hazard Interpreter</h3>
+          </div>
+          <PanelDescription
+            id="oracle-module"
+            title="Neural Oracle"
+            summary="An AI system that interprets live space-weather telemetry and answers plain-English questions about hazard risk."
+            axes="Kp = geomagnetic storm index (0–9). Bz = IMF north-south component in nanotesla — negative = energy coupling into Earth's magnetosphere. TOTPOT/SAVNCPP/TOTUSJZ = solar active region magnetic stress indicators."
+            whyItMatters="During elevated space weather, operators need fast answers about HF radio risk, satellite drag, GPS accuracy, and power grid exposure. The Oracle translates raw sensor data into actionable guidance."
+            live={ready ? `Running on: ${provider}` : 'Initialising…'}
+            size="xs"
+          />
         </div>
         <div className="text-[8px] uppercase tracking-[0.12em] text-cyan-300/80">
           {ready
@@ -96,12 +109,20 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
       </div>
 
       {anomalyLoading && (
-        <div className="mb-2 rounded border border-amber-400/30 bg-black/40 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-amber-200/90">
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-2 rounded border border-amber-400/30 bg-black/40 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-amber-200/90"
+        >
           Asynchronous cloud anomaly pass in progress...
         </div>
       )}
 
-      <div className="mb-3 rounded border border-cyan-500/20 bg-black/45 p-2 text-[9px] uppercase tracking-[0.08em] text-cyan-200/90">
+      <div
+        role="region"
+        aria-label={`Live telemetry: ${kpAriaLabel(snapshot.kpIndex)}; ${bzAriaLabel(snapshot.bzGsm)}; ${solarWindAriaLabel(snapshot.solarWindSpeed)}; ${flareAriaLabel(snapshot.flareClass)}`}
+        className="mb-3 rounded border border-cyan-500/20 bg-black/45 p-2 text-[9px] uppercase tracking-[0.08em] text-cyan-200/90"
+      >
         Kp {snapshot.kpIndex.toFixed(1)} · Bz {snapshot.bzGsm.toFixed(1)} nT · Wind {Math.round(snapshot.solarWindSpeed)} km/s · {snapshot.flareClass}
         <div className="mt-1 text-[8px] tracking-[0.12em] text-cyan-400/80">
           TOTPOT {snapshot.totpot.toFixed(1)} · SAVNCPP {snapshot.savncpp.toFixed(2)} · TOTUSJZ {snapshot.totusjz.toFixed(1)}
@@ -120,6 +141,8 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
           <div className="flex items-center gap-1">
             <button
               type="button"
+              aria-pressed={explainMode === 'global'}
+              aria-label="SHAP-style global feature attribution — shows which inputs contribute most to the overall hazard score"
               onClick={() => setExplainMode('global')}
               className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.12em] ${explainMode === 'global' ? 'border-cyan-300 text-cyan-100' : 'border-cyan-500/30 text-cyan-400/80'}`}
             >
@@ -127,6 +150,8 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
             </button>
             <button
               type="button"
+              aria-pressed={explainMode === 'local'}
+              aria-label="LIME-style local feature attribution — shows which inputs drove this specific prediction"
               onClick={() => setExplainMode('local')}
               className={`h-6 px-2 rounded border text-[8px] uppercase tracking-[0.12em] ${explainMode === 'local' ? 'border-cyan-300 text-cyan-100' : 'border-cyan-500/30 text-cyan-400/80'}`}
             >
@@ -134,6 +159,9 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
             </button>
             <button
               type="button"
+              aria-pressed={showExplain}
+              aria-busy={explaining}
+              aria-label={showExplain ? 'Hide explainability chart' : 'Show feature attribution chart explaining the hazard score'}
               onClick={() => {
                 const next = !showExplain;
                 setShowExplain(next);
@@ -277,14 +305,22 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
         }}
       >
         <input
+          id="oracle-question-input"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder="e.g. What is the next 6h outage risk?"
+          aria-label="Ask the Neural Oracle a space-weather question in plain English"
+          aria-describedby="oracle-input-hint"
           className="h-8 flex-1 rounded border border-cyan-500/30 bg-black/55 px-2 text-[10px] text-cyan-100 outline-none focus:border-cyan-300"
         />
+        <span id="oracle-input-hint" className="sr-only">
+          Type a question about current space weather, geomagnetic conditions, or satellite risk. The Oracle uses live telemetry to answer in plain English.
+        </span>
         <button
           type="submit"
           disabled={loading || !prompt.trim()}
+          aria-busy={loading}
+          aria-label={loading ? 'Processing your question…' : 'Submit question to Neural Oracle'}
           className="h-8 rounded border border-cyan-500/40 px-2 text-[9px] uppercase tracking-[0.14em] text-cyan-100 disabled:opacity-40"
         >
           {loading ? '...' : 'Ask'}

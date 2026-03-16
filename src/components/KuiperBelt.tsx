@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -15,6 +15,11 @@ interface KuiperBeltProps {
 
 export default function KuiperBelt({ visible = true }: KuiperBeltProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
+
+  // The instanced mesh itself never moves — disable per-frame world-matrix recompute.
+  useEffect(() => {
+    if (meshRef.current) meshRef.current.matrixAutoUpdate = false;
+  }, []);
 
   /** Generate belt particle positions once */
   const { dummy, driftSpeeds } = useMemo(() => {

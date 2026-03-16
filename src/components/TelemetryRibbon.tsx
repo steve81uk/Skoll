@@ -1,4 +1,5 @@
 import type { FC } from 'react';
+import { kpAriaLabel, bzAriaLabel, solarWindAriaLabel } from '../lib/a11y';
 
 /* ── Types ─────────────────────────────────────────────── */
 interface TelemetryData {
@@ -85,14 +86,15 @@ function radColor(msvPerDay: number) {
 }
 
 /* ── Pill sub-component ─────────────────────────────────── */
-const Pill: FC<{ label: string; value: string; color?: string; pulse?: boolean }> = ({
-  label, value, color = '#e0f0ff', pulse = false,
+const Pill: FC<{ label: string; value: string; color?: string; pulse?: boolean; ariaLabel?: string }> = ({
+  label, value, color = '#e0f0ff', pulse = false, ariaLabel,
 }) => (
-  <div className="border border-cyan-500/20 rounded px-2 py-1.5">
-    <div className="text-cyan-500/80">{label}</div>
+  <div className="border border-cyan-500/20 rounded px-2 py-1.5" aria-label={ariaLabel}>
+    <div className="text-cyan-500/80" aria-hidden={ariaLabel ? 'true' : undefined}>{label}</div>
     <div
       className={`font-semibold tabular-nums telemetry-value${pulse ? ' animate-pulse' : ''}`}
       style={{ color }}
+      aria-hidden={ariaLabel ? 'true' : undefined}
     >
       {value}
     </div>
@@ -117,7 +119,7 @@ const PanelMode: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
     <div className="rounded-md border border-cyan-500/20 bg-black/40 p-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9px] uppercase tracking-[0.12em] font-mono">
         <Pill label="MET" value={formatMET(data.metSeconds ?? 0)} />
-        <Pill label="KP IDX" value={kp.toFixed(1)} color={kpColor(kp)} pulse={isKpAlert} />
+        <Pill label="KP IDX" value={kp.toFixed(1)} color={kpColor(kp)} pulse={isKpAlert} ariaLabel={kpAriaLabel(kp)} />
 
         {currentPlanet && planetRad ? (
           <>
@@ -168,13 +170,14 @@ const PanelMode: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
         </div>
 
         {bundle?.solarWindSpeed != null && (
-          <Pill label="SOLAR WIND" value={`${bundle.solarWindSpeed.toFixed(0)} km/s`} color="#ffaa44" />
+          <Pill label="SOLAR WIND" value={`${bundle.solarWindSpeed.toFixed(0)} km/s`} color="#ffaa44" ariaLabel={solarWindAriaLabel(bundle.solarWindSpeed)} />
         )}
         {bundle?.bz != null && (
           <Pill
             label="IMF Bz"
             value={`${bundle.bz > 0 ? '+' : ''}${bundle.bz.toFixed(1)} nT`}
             color={bundle.bz < -5 ? '#ff4444' : '#a0d4ff'}
+            ariaLabel={bzAriaLabel(bundle.bz)}
           />
         )}
       </div>
@@ -222,8 +225,11 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
         <span className="text-cyan-500/80">MET</span>
         <span className="text-cyan-100 font-semibold live-clock">{formatMET(data.metSeconds ?? 0)}</span>
         <span className="text-cyan-400/30">│</span>
-        <span className="text-cyan-500/80">KP</span>
+        <span className="text-cyan-500/80" aria-hidden="true">KP</span>
         <span
+          role={kp >= 5 ? 'alert' : 'status'}
+          aria-live={kp >= 5 ? 'assertive' : 'polite'}
+          aria-label={kpAriaLabel(kp)}
           className={`${isKpAlert ? 'font-bold drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]' : 'font-semibold'} telemetry-value`}
           style={{ color: kpColor(kp) }}
         >
@@ -242,6 +248,7 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
         <span className="text-cyan-500/60 truncate max-w-[9ch] sm:max-w-[14ch]">{loc.name.split(',')[0].toUpperCase()}</span>
         <span
           className="rounded px-1 py-px text-[7px]"
+          aria-label={auroraVisible ? `Aurora currently visible from ${loc.name}` : `Aurora requires Kp ${kpThreshold} or higher — currently Kp ${kp.toFixed(1)}`}
           style={{
             background: auroraVisible ? 'rgba(80,255,160,0.15)' : 'rgba(100,130,200,0.10)',
             border: `1px solid ${auroraVisible ? 'rgba(80,255,160,0.35)' : 'rgba(100,130,200,0.25)'}`,
@@ -253,9 +260,14 @@ const FixedBar: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
         </span>
         {bundle?.solarWindSpeed != null && (
           <>
-            <span className="text-cyan-400/30">│</span>
-            <span className="text-cyan-500/80 hidden sm:inline">SW</span>
-            <span className="text-orange-300 font-semibold telemetry-value">{bundle.solarWindSpeed.toFixed(0)} km/s</span>
+            <span className="text-cyan-400/30" aria-hidden="true">│</span>
+            <span className="text-cyan-500/80 hidden sm:inline" aria-hidden="true">SW</span>
+            <span
+              className="text-orange-300 font-semibold telemetry-value"
+              aria-label={solarWindAriaLabel(bundle.solarWindSpeed)}
+            >
+              {bundle.solarWindSpeed.toFixed(0)} km/s
+            </span>
           </>
         )}
       </div>

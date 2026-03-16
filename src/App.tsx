@@ -1,26 +1,24 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Orbit, Volume2, VolumeX, Bell, Share2, Zap, Gamepad2, Radio, Leaf } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Orbit, Volume2, VolumeX, Bell, Share2, Zap, Gamepad2, Radio, Leaf, Lock, Unlock, Activity } from 'lucide-react';
 import * as THREE from 'three';
 import { useCameraFocus } from './hooks/useCameraFocus';
 import { CosmicTooltip } from './components/CosmicTooltip';
 import type { TooltipContent } from './context/TooltipContext';
 import { RetroBoot } from './components/RetroBoot';
+import { NeuralBoot } from './components/NeuralBoot';
+import { AudioAtmosphere } from './services/audioAtmosphere';
 import { TelemetryRibbon } from './components/TelemetryRibbon';
-import { PlanetDiagnosticsSlate } from './components/PlanetDiagnosticsSlate';
-import { LandingSlate } from './components/LandingSlate';
 import { MagneticReversalAlert } from './components/MagneticReversalAlert';
 import { SlateErrorBoundary } from './components/SlateErrorBoundary';
 import type { ActiveObject } from './components/HangarModule';
 import { SatelliteOrbitalTracker } from './components/SatelliteOrbitalTracker';
 import { useGlobalTelemetry } from './hooks/useGlobalTelemetry';
-import { calculateExoTelemetry, SYSTEM_CONSTANTS } from './ml/ExoPhysics';
+import { SYSTEM_CONSTANTS } from './ml/ExoPhysics';
 import { MOON_BODIES, PLANET_BODIES, type EphemerisVectorAU, type ForecastBodyName } from './ml/OrbitalMechanics';
-import { SurfaceAtmosphere } from './shaders/SurfaceAtmosphereShader';
 import { CameraTracker } from './components/CameraTracker';
 import { DynamicSun } from './components/DynamicSun';
 import { EnhancedStarfield } from './components/EnhancedStarfield';
@@ -44,7 +42,6 @@ import EarthWeatherNow, { type EarthWeatherCurrent } from './components/EarthWea
 import EarthWeatherLayers from './components/EarthWeatherLayers';
 import EarthWindStreamlines from './components/EarthWindStreamlines';
 import WeatherLayerControls from './components/WeatherLayerControls';
-import SurfaceDEMTerrain from './components/SurfaceDEMTerrain';
 import EarthCutawayExplorer from './components/EarthCutawayExplorer';
 import EarthStoryTimelinePanel from './components/EarthStoryTimelinePanel';
 import AtmosphereColumnPanel from './components/AtmosphereColumnPanel';
@@ -56,6 +53,7 @@ import RadioBlackoutMap from './components/RadioBlackoutMap';
 import OceanClimatePanel from './components/OceanClimatePanel';
 import AlertLogPanel from './components/AlertLogPanel';
 import GlossaryPanel from './components/GlossaryPanel';
+import { SceneLegend } from './components/SceneLegend';
 import GraphMissionHub from './components/GraphMissionHub';
 import type { DeepTimeEpoch } from './components/DeepTimeSlicer';
 import TerminalLogHUD from './components/TerminalLogHUD';
@@ -75,17 +73,15 @@ import { useLSTMWorker } from './hooks/useLSTMWorker';
 import { useGOESFlux } from './hooks/useGOESFlux';
 import { useNOAADONKI } from './hooks/useNOAADONKI';
 import { useSpaceWeatherProviders } from './hooks/useSpaceWeatherProviders';
-import { useAurorEyeTimelineSync } from './hooks/useAurorEyeTimelineSync';
 import { createHazardTelemetryModel } from './services/hazardModel';
 import { useSolarSonification } from './hooks/useSolarSonification';
 import { useKesslerWorker } from './hooks/useKesslerWorker';
 import { DEFAULT_RULES, evaluateAlerts, type TriggeredAlert } from './services/alertEngine';
 import { buildSnapshotUrl, captureCanvasScreenshot, decodeSnapshot, type SnapshotState } from './services/snapshotService';
 import { postAlertsToRelay } from './services/socialRelay';
-import type { AurorEyeFrameInput, TelemetryTimelinePoint } from './services/aurorEyeSync';
 import eventsData from './ml/space_weather_events.json';
 
-type ViewMode = 'HELIOCENTRIC' | 'SURFACE';
+type ViewMode = 'HELIOCENTRIC';
 type TimeMode = Date | 'LIVE';
 type BodyName = keyof typeof SYSTEM_CONSTANTS;
 type FXQuality = 'LOW' | 'HIGH';
@@ -104,7 +100,6 @@ const DOCK_TILE_TOOLTIPS: Record<string, TooltipContent> = {
   'mission-core':    { title: 'Mission Core',         emoji: '⌁', accentColor: '#06b6d4', tagline: 'Operations Centre',      description: 'Central ops overview: threat level, KPIs, and active alert stack.' },
   'sat-threat':      { title: 'Orbital Threat',       emoji: '⚠', accentColor: '#f59e0b', tagline: 'Satellite Risk',         description: 'Satellite collision and atmospheric drag risk driven by live space weather.' },
   'hangar':          { title: 'Satellite Hangar',     emoji: '⬢', accentColor: '#f59e0b', tagline: 'Active Fleet',           description: 'Active satellite roster with orbital mechanics and debris proximity.' },
-  'oracle':          { title: 'Neural Oracle',        emoji: '✦', accentColor: '#f59e0b', tagline: 'AI Hazard Interpreter',  description: 'Query live space-weather state in plain English. Powered by flan-t5.' },
   'fireball':        { title: 'Fireball Tracker',     emoji: '☄', accentColor: '#f59e0b', tagline: 'Near-Earth Events',      description: 'NASA CNEOS fireball, bolide, and near-Earth object impact log.' },
   'forecast-radar':  { title: 'Forecast Radar',       emoji: '◎', accentColor: '#8b5cf6', tagline: 'WSA-Enlil Propagation', description: 'Solar wind and CME propagation forecast from WSA-Enlil model.' },
   'diagnostics':     { title: 'Planet Diagnostics',   emoji: '⟡', accentColor: '#8b5cf6', tagline: 'Deep Science Stats',    description: 'Planetary science: magnetosphere, atmosphere, and core dynamics.' },
@@ -129,10 +124,6 @@ const LazyHumanImpactSlate = lazy(() =>
   import('./components/HumanImpactSlate').then((module) => ({ default: module.HumanImpactSlate })),
 );
 const LazyHangarModule = lazy(() => import('./components/HangarModule').then((module) => ({ default: module.HangarModule })));
-const LazyOracleModule = lazy(() => import('./components/OracleModule').then((module) => ({ default: module.OracleModule })));
-const LazyHealthDashboard = lazy(() =>
-  import('./components/HealthDashboard').then((module) => ({ default: module.HealthDashboard })),
-);
 const LazyCinematicPostFX = lazy(() =>
   import('./components/CinematicPostFX').then((module) => ({ default: module.CinematicPostFX })),
 );
@@ -261,23 +252,19 @@ const formatTimelineTime = (value: Date) => value.toISOString().slice(11, 19);
 
 const EarthZoomLadderController = ({
   active,
-  viewMode,
   planetRefs,
   onLodChange,
-  onRequestSurface,
 }: {
   active: boolean;
-  viewMode: ViewMode;
   planetRefs: Map<string, THREE.Group>;
   onLodChange: (lod: EarthLodStage, distance: number) => void;
-  onRequestSurface: () => void;
 }) => {
   const { camera } = useThree();
   const lastLodRef = useRef<EarthLodStage>('SPACE');
-  const lastSurfaceReqRef = useRef(0);
   const smoothedDistanceRef = useRef(150);
   const nearRef = useRef(camera.near);
   const farRef = useRef(camera.far);
+  const clipTickRef = useRef(0);
 
   const pickLod = (distance: number, current: EarthLodStage): EarthLodStage => {
     // Hysteresis windows prevent rapid boundary flapping at Earth zoom thresholds.
@@ -322,23 +309,17 @@ const EarthZoomLadderController = ({
     }
 
     // Dynamic near/far clip planes to reduce precision flicker when zooming Earth.
-    const targetNear = THREE.MathUtils.clamp(distance * 0.0025, 0.0007, 0.75);
-    const targetFar = THREE.MathUtils.clamp(distance * 80, 500, 2_000_000);
+    // Use a safer near-plane floor and throttle projection updates to avoid micro-jitter.
+    const targetNear = THREE.MathUtils.clamp(distance * 0.0032, 0.01, 1.2);
+    const targetFar = THREE.MathUtils.clamp(distance * 64, 900, 1_400_000);
     nearRef.current = THREE.MathUtils.lerp(nearRef.current, targetNear, Math.min(1, delta * 4));
     farRef.current = THREE.MathUtils.lerp(farRef.current, targetFar, Math.min(1, delta * 4));
 
-    if (Math.abs(camera.near - nearRef.current) > 0.0008 || Math.abs(camera.far - farRef.current) > 80) {
+    clipTickRef.current += 1;
+    if (clipTickRef.current % 3 === 0 && (Math.abs(camera.near - nearRef.current) > 0.003 || Math.abs(camera.far - farRef.current) > 300)) {
       camera.near = nearRef.current;
       camera.far = farRef.current;
       camera.updateProjectionMatrix();
-    }
-
-    if (viewMode === 'HELIOCENTRIC' && distance < 0.7) {
-      const now = performance.now();
-      if (now - lastSurfaceReqRef.current > 1500) {
-        lastSurfaceReqRef.current = now;
-        onRequestSurface();
-      }
     }
   });
 
@@ -379,7 +360,7 @@ export default function App() {
   const [currentPlanet, setCurrentPlanet] = useState<BodyName | null>(null);
   const [currentDate, setCurrentDate] = useState<TimeMode>('LIVE');
   const [tacticalAlerts, setTacticalAlerts] = useState<string[]>([]);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [, setShowDiagnostics] = useState(false);
   const [satelliteFocusTarget, setSatelliteFocusTarget] = useState<THREE.Vector3 | null>(null);
   const [satelliteFocusTrigger, setSatelliteFocusTrigger] = useState(0);
   const [trackedObject, setTrackedObject] = useState<ActiveObject | null>(null);
@@ -417,7 +398,7 @@ export default function App() {
   const [lstmLatencyMs, setLstmLatencyMs] = useState<number | null>(null);
   const inferDispatchRef = useRef<number | null>(null);
   const [location, setLocation] = useState<LocationPreset>({ name: 'Cambridge, UK', lat: 52.2, lon: 0.12 });
-  const [surfaceAltitudeKm, setSurfaceAltitudeKm] = useState(0);
+  const [, setSurfaceAltitudeKm] = useState(0);
   const [surfaceWindKmh, setSurfaceWindKmh] = useState(20);
   const [weatherOpacity, setWeatherOpacity] = useState({ cloud: 0.55, precip: 0.45, snow: 0.55, wind: 0.36, stream: 0.52 });
   const [weatherVisibility, setWeatherVisibility] = useState({ cloud: true, precip: true, snow: true, wind: true, stream: true });
@@ -430,7 +411,7 @@ export default function App() {
   const [cutawayShells, setCutawayShells] = useState({ crust: true, mantle: true, outerCore: true, innerCore: true });
   const [co2Ppm, setCo2Ppm] = useState<number | null>(null);
   const [alerts, setAlerts] = useState<TriggeredAlert[]>([]);
-  const [toasts, setToasts] = useState<TriggeredAlert[]>([]);
+  const [, setToasts] = useState<TriggeredAlert[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [liteMode, setLiteMode] = useState(false);
   const [ecoMode, setEcoMode] = useState(false);
@@ -444,9 +425,9 @@ export default function App() {
   const burstTimeoutRef = useRef<number | null>(null);
   const adaptiveDprLastAdjustAtRef = useRef(0);
   const envWarnedRef = useRef(false);
+  const audioAtmosphereRef = useRef<AudioAtmosphere>(new AudioAtmosphere());
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const dockPanelRef = useRef<HTMLDivElement | null>(null);
-  const commandMenuRef = useRef<HTMLDivElement | null>(null);
   const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const holdScrubRef = useRef<number | null>(null);
   const precisionFetchTicketRef = useRef(0);
@@ -565,7 +546,6 @@ export default function App() {
 
   // ─── NOAA / DONKI live data (web worker) ────────────────────────────────────
   const noaaDonki = useNOAADONKI();
-  const aurorEyeFrames = useMemo<AurorEyeFrameInput[]>(() => [], []);
 
   // ─── LSTM off-thread inference (web worker) ─────────────────────────────────
   const lstmWorker = useLSTMWorker();
@@ -616,11 +596,8 @@ export default function App() {
       { id: 'sat-threat', label: 'Orbital Threat' },
       { id: 'human-impact', label: 'Human Impact' },
       { id: 'hangar', label: 'Hangar Uplink' },
-      { id: 'oracle', label: 'Oracle Archive' },
-      { id: 'diagnostics', label: 'Planet Diagnostics' },
-      { id: 'health', label: 'Neural Health' },
-      { id: 'forecast-radar', label: 'Forecast Radar' },
       { id: 'fireball', label: 'Fireball Tracker' },
+      { id: 'forecast-radar', label: 'Forecast Radar' },
       { id: 'noaa-feed', label: 'NOAA Live Feed' },
       { id: 'lstm-forecast', label: 'LSTM Forecast' },
       { id: 'magnetic-grid', label: 'Magnetic Grid' },
@@ -671,11 +648,11 @@ export default function App() {
       ],
       'ml-forecasts': [
         'lstm-forecast', 'forecast-radar', 'data-alchemist', 'kessler-net',
-        'progression', 'diagnostics', 'health', 'forecast-slicer', 'trajectory-forecast', 'carbon-link', 'emissions-impact', 'ocean-climate', 'graph-hub',
+        'progression', 'forecast-slicer', 'trajectory-forecast', 'carbon-link', 'emissions-impact', 'ocean-climate', 'graph-hub',
       ],
       'simulations': [
         'threat-simulator', 'deep-time', 'carrington-sim', 'apophis-tracker',
-        'sat-threat', 'human-impact', 'hangar', 'oracle', 'fireball', 'earth-dynamo',
+        'sat-threat', 'human-impact', 'hangar', 'fireball', 'earth-dynamo',
         'planet-core', 'heliopause', 'grid-failure', 'radio-blackout', 'gic-risk', 'gps-accuracy', 'radio-blackout-map',
       ],
       'all-tools': allToolIds,
@@ -689,7 +666,6 @@ export default function App() {
       { id: 'mission-core', label: 'Mission', icon: '⌁', tone: 'telemetry' },
       { id: 'sat-threat', label: 'Threat', icon: '⚠', tone: 'sim' },
       { id: 'hangar', label: 'Hangar', icon: '⬢', tone: 'sim' },
-      { id: 'oracle', label: 'Oracle', icon: '✦', tone: 'sim' },
       { id: 'fireball', label: 'Fireball', icon: '☄', tone: 'sim' },
     ],
     [],
@@ -698,7 +674,7 @@ export default function App() {
   const rightDockTiles = useMemo<Array<{ id: string; label: string; icon: string; tone: DockTone }>>(
     () => [
       { id: 'forecast-radar', label: 'Radar', icon: '◎', tone: 'forecast' },
-      { id: 'diagnostics', label: 'Diagnostics', icon: '⟡', tone: 'forecast' },
+      { id: 'dsn-live', label: 'DSN', icon: '⌬', tone: 'telemetry' },
       { id: 'noaa-feed', label: 'NOAA', icon: '⌬', tone: 'telemetry' },
       { id: 'lstm-forecast', label: 'LSTM', icon: '∿', tone: 'forecast' },
       { id: 'magnetic-grid', label: 'Mag Grid', icon: '⋈', tone: 'telemetry' },
@@ -937,9 +913,6 @@ export default function App() {
       if (snap.epoch && Number.isFinite(snap.epoch)) {
         setCurrentDate(new Date(snap.epoch));
       }
-      if (snap.zoomStage === 'LOCAL' || snap.zoomStage === 'REGIONAL') {
-        setViewMode('SURFACE');
-      }
       if (Array.isArray(snap.openPanels) && snap.openPanels.length > 0) {
         setActiveSubTileId(snap.openPanels[0]);
         setSelectedTileId(snap.openPanels[0]);
@@ -1014,41 +987,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const atmosphere = audioAtmosphereRef.current;
     if (audioEnabled) {
       solarSonification.start();
-      return;
+      atmosphere.enable();
+    } else {
+      solarSonification.stop();
+      atmosphere.disable();
     }
-    solarSonification.stop();
   }, [audioEnabled, solarSonification]);
+
+  // Keep ambient atmosphere in sync with live telemetry
+  useEffect(() => {
+    if (!audioEnabled) return;
+    audioAtmosphereRef.current.updateFromTelemetry(
+      telemetry.kpIndex ?? 0,
+      noaaDonki.bundle?.bzGsm ?? 0,
+      telemetry.windSpeed ?? 400,
+    );
+  }, [audioEnabled, telemetry.kpIndex, telemetry.windSpeed, noaaDonki.bundle?.bzGsm]);
 
   useEffect(() => {
     if (audioEnabled && cmeImpactActive) {
       solarSonification.triggerCME();
+      audioAtmosphereRef.current.triggerCMEArrival();
     }
   }, [audioEnabled, cmeImpactActive, solarSonification]);
-
-  const telemetryTimeline = useMemo<TelemetryTimelinePoint[]>(() => {
-    const kpSeries = noaaDonki.bundle?.kpSeries ?? [];
-    const points: TelemetryTimelinePoint[] = [];
-    kpSeries.forEach((point) => {
-      const timestamp = Date.parse(point.time);
-      if (!Number.isFinite(timestamp)) {
-        return;
-      }
-      points.push({
-        timestamp,
-        kpIndex: point.kp,
-        bzGsm: noaaDonki.bundle?.bzGsm,
-        solarWindSpeed: noaaDonki.bundle?.speed,
-      });
-    });
-    return points;
-  }, [noaaDonki.bundle]);
-  const aurorEyeSync = useAurorEyeTimelineSync({
-    frames: aurorEyeFrames,
-    telemetryTimeline,
-    maxSkewMs: 1_500,
-  });
 
   useEffect(() => {
     if (!dockModalTileId) {
@@ -1174,29 +1138,12 @@ export default function App() {
             <LazyHangarModule objects={ACTIVE_OBJECTS} onSelectObject={handleSatelliteSelect} />
           </Suspense>
         );
-      case 'oracle':
+      case 'fireball':
         return (
-          <Suspense fallback={null}>
-            <LazyOracleModule
-              snapshot={hazardModel}
-              alerts={lstmWorker.forecast?.alerts ?? []}
-              aurorEyeSync={aurorEyeSync.summary}
-            />
-          </Suspense>
-        );
-      case 'diagnostics':
-        return (
-          <PlanetDiagnosticsSlate
-            planetName={currentPlanet ?? ''}
-            isVisible={showDiagnostics && !!currentPlanet}
-            exoTelemetry={selectedExoTelemetry}
+          <FireballTrackerSlate
+            fireballCount={telemetry.fireballCount}
+            kpIndex={telemetry.kpIndex}
           />
-        );
-      case 'health':
-        return (
-          <Suspense fallback={null}>
-            <LazyHealthDashboard />
-          </Suspense>
         );
       case 'noaa-feed':
         return (
@@ -1215,13 +1162,6 @@ export default function App() {
             currentIntensity={telemetry.currentIntensity}
             cmeImpactActive={cmeImpactActive}
             planetName={currentPlanet ?? undefined}
-          />
-        );
-      case 'fireball':
-        return (
-          <FireballTrackerSlate
-            fireballCount={telemetry.fireballCount}
-            kpIndex={telemetry.kpIndex}
           />
         );
       case 'lstm-forecast':
@@ -1719,25 +1659,6 @@ export default function App() {
     };
   }, []);
 
-  const selectedExoTelemetry = useMemo(() => {
-    if (!currentPlanet || telemetry.kp === undefined) {
-      return undefined;
-    }
-
-    if (currentPlanet === 'Pluto' || currentPlanet === 'Moon' || currentPlanet === 'Io' || currentPlanet === 'Europa' || currentPlanet === 'Titan') {
-      return calculateExoTelemetry(
-        currentPlanet,
-        7,
-        telemetry.windSpeed,
-        6,
-        telemetry.kp,
-        effectiveDate,
-      );
-    }
-
-    return undefined;
-  }, [currentPlanet, effectiveDate, telemetry.kp, telemetry.windSpeed]);
-
   useEffect(() => {
     if (!openMenuId) {
       return;
@@ -1822,7 +1743,7 @@ export default function App() {
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
   const liveKesslerCascade = kesslerWorker.forecast ?? lstmWorker.forecast?.kesslerCascade ?? null;
   const kesslerAngularScale = 0.65 + (liveKesslerCascade?.next7dProbability ?? 0) * 3.25;
-  const isEarthOrbitalView = currentPlanet === 'Earth' && viewMode !== 'SURFACE';
+  const isEarthOrbitalView = currentPlanet === 'Earth';
 
   const shouldRenderEarthBowShock = useMemo(() => {
     if (!isEarthOrbitalView || liteMode) {
@@ -1865,7 +1786,7 @@ export default function App() {
   }, [isEarthOrbitalView, liteMode, weatherVisibility.stream, earthLodStage, earthZoomDistance]);
 
   const shouldRenderEarthCoreDynamo = useMemo(() => {
-    if (currentPlanet !== 'Earth' || viewMode === 'SURFACE') {
+    if (currentPlanet !== 'Earth') {
       return false;
     }
 
@@ -1879,7 +1800,7 @@ export default function App() {
     }
 
     return earthLodStage === 'LOCAL' && earthZoomDistance <= 0.42;
-  }, [currentPlanet, viewMode, cutawayEnabled, earthLodStage, earthZoomDistance, liteMode]);
+  }, [currentPlanet, cutawayEnabled, earthLodStage, earthZoomDistance, liteMode]);
 
   const applyResolvedVectors = useCallback((vectors: EphemerisVectorAU[]) => {
     const next: Record<string, EphemerisVectorAU> = {};
@@ -1963,7 +1884,7 @@ export default function App() {
   const nudgeAdaptiveDpr = useCallback((direction: 'up' | 'down') => {
     const now = performance.now();
     // Prevent rapid up/down oscillation that appears as visual flicker.
-    if (now - adaptiveDprLastAdjustAtRef.current < 800) {
+    if (now - adaptiveDprLastAdjustAtRef.current < 2400) {
       return;
     }
 
@@ -1972,7 +1893,7 @@ export default function App() {
     const floor = ecoMode ? 0.6 : liteMode ? 0.75 : 0.9;
 
     setAdaptiveDpr((prev) => {
-      const delta = direction === 'down' ? -0.05 : 0.025;
+      const delta = direction === 'down' ? -0.04 : 0.015;
       const next = THREE.MathUtils.clamp(Number((prev + delta).toFixed(3)), floor, cap);
       // Ignore tiny jitter adjustments that are not perceptible.
       return Math.abs(next - prev) < 0.012 ? prev : next;
@@ -2008,12 +1929,25 @@ export default function App() {
             frameloop="always"
             shadows={!liteMode && !ecoMode}
             dpr={canvasDpr}
-            gl={{ antialias: !ecoMode && !retroMode, alpha: true, logarithmicDepthBuffer: true }}
+            gl={{
+              antialias: !ecoMode && !retroMode,
+              alpha: true,
+              logarithmicDepthBuffer: true,
+              // Prefer discrete GPU on multi-GPU systems for maximum throughput.
+              powerPreference: 'high-performance',
+              // Stencil buffer unused; disabling saves memory bandwidth.
+              stencil: false,
+            }}
             onCreated={({ gl, camera }) => {
               // Ensure camera sees all THREE.Layers (required after any bloom/layer changes)
               camera.layers.enableAll();
               gl.shadowMap.enabled = !liteMode && !ecoMode;
               gl.shadowMap.type = THREE.PCFSoftShadowMap;
+              // Shadow map on-demand: only recompute when explicitly requested.
+              // Components that cast shadows call gl.shadowMap.needsUpdate = true
+              // via the scene's pointLight. This prevents per-frame shadow redraws.
+              gl.shadowMap.autoUpdate = false;
+              gl.shadowMap.needsUpdate = true; // Initial bake
               gl.localClippingEnabled = true;
               setTexturesLoaded(true);
             }}
@@ -2025,22 +1959,15 @@ export default function App() {
                 onDecline={() => {
                   nudgeAdaptiveDpr('down');
                 }}
-                onIncline={() => {
-                  nudgeAdaptiveDpr('up');
-                }}
               />
             )}
             <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} near={0.01} far={1_500_000} />
             <EarthZoomLadderController
               active={currentPlanet === 'Earth'}
-              viewMode={viewMode}
               planetRefs={planetRefs}
               onLodChange={(lod, distance) => {
                 setEarthLodStage(lod);
                 setEarthZoomDistance(distance);
-              }}
-              onRequestSurface={() => {
-                setViewMode('SURFACE');
               }}
             />
             {!liteMode && <EnhancedStarfield />}
@@ -2051,182 +1978,153 @@ export default function App() {
             <ambientLight intensity={0.15} />
             <pointLight position={[0, 0, 0]} intensity={5} color="#fffae5" decay={2} distance={2000} castShadow={!liteMode} />
 
-            {/* THE SUN: RENDERED IN HELIOCENTRIC MODE */}
-            {viewMode === 'HELIOCENTRIC' && (
-              <>
-                <DynamicSun
-                  intensity={telemetry.currentIntensity}
-                  solarWindSpeed={currentHistoricalEvent?.solarWindSpeed || telemetry.windSpeed}
-                  isHistoricalEvent={!!currentHistoricalEvent}
-                />
-                <Suspense fallback={null}>
-                  {/* Sagittarius A* — supermassive black hole at galactic centre */}
-                  {!liteMode && <LazySagittariusA />}
-                  {/* Kuiper Belt — visible in heliocentric view */}
-                  {!liteMode && <LazyKuiperBelt visible={viewMode === 'HELIOCENTRIC'} />}
-                  {/* Oort Cloud — log-depth GLSL shell at artistic 4–7k units */}
-                  {!liteMode && <LazyOortCloud visible={viewMode === 'HELIOCENTRIC'} />}
-                </Suspense>
-              </>
-            )}
+            {/* THE SUN: always rendered */}
+            <>
+              <DynamicSun
+                intensity={telemetry.currentIntensity}
+                solarWindSpeed={currentHistoricalEvent?.solarWindSpeed || telemetry.windSpeed}
+                isHistoricalEvent={!!currentHistoricalEvent}
+              />
+              <Suspense fallback={null}>
+                {!liteMode && <LazySagittariusA />}
+                {!liteMode && <LazyKuiperBelt visible={viewMode === 'HELIOCENTRIC'} />}
+                {!liteMode && <LazyOortCloud visible={viewMode === 'HELIOCENTRIC'} />}
+              </Suspense>
+            </>
 
             <Suspense fallback={null}>
-              {viewMode === 'SURFACE' ? (
-                <>
-                  {/* Distant Sun as point light source in sky */}
-                  <mesh position={[500, 300, -800]} scale={20}>
-                    <sphereGeometry args={[1, 16, 16]} />
-                    <meshBasicMaterial 
-                      color="#ffee99" 
-                      toneMapped={false}
-                    />
-                  </mesh>
-                  <SurfaceAtmosphere color="#00f3ff" type="CO2" density={Math.max(0.9, telemetry.currentIntensity * 2)} />
-                  <SurfaceDEMTerrain
-                    planetName={currentPlanet}
-                    location={location}
-                    visible
-                    onSamplerReady={(sampler) => {
-                      terrainSamplerRef.current = sampler;
-                    }}
-                  />
-                </>
-              ) : (
-                <Suspense fallback={null}>
-                  <LazyPlanetRenderer
-                    onPlanetSelect={focusOnPlanet}
-                    onFocusAnimationComplete={handleFocusAnimationComplete}
-                    currentIntensity={telemetry.currentIntensity}
-                    currentDate={effectiveDate}
-                    isLiveMode={currentDate === 'LIVE'}
-                    cmeOverdrive={cmeImpactActive}
-                    standoffDistance={telemetry.standoffDistance}
-                    onPlanetRefsReady={setPlanetRefs}
-                    epochYear={useDeepTimeEpoch ? selectedEpochYear : undefined}
-                    positionOverridesAu={highPrecisionModeEnabled ? highPrecisionVectors : undefined}
-                    focusedPlanetName={currentPlanet}
-                    kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
-                    kesslerCascade={liveKesslerCascade}
-                    auroraEnabled={!ecoMode}
-                  />
-                  {/* Apophis 2029 flyby orbit */}
-                  <LazyApophisTracker visible={apophisVisible} epochYear={selectedEpochYear} />
-                  <CameraTracker
-                    targetName={trackedPlanetName}
-                    planetRefs={planetRefs}
-                    isEnabled={!!trackedPlanetName}
-                    onManualOverride={() => {
-                      setTrackedPlanetName(null);
-                    }}
-                  />
-                  <LazyCMEPropagationVisualizer
-                    isActive={cmeActive}
-                    speed={telemetry.windSpeed || 450}
-                    onImpact={handleCmeImpact}
-                  />
-                  {trackedObject && (
-                    <SatelliteOrbitalTracker
-                      planetPosition={trackedObject.hostPosition}
-                      planetRadius={trackedObject.hostRadius}
-                      standoffDistance={telemetry.standoffDistance}
-                    />
-                  )}
-                  <SatelliteCameraFocus
-                    target={satelliteFocusTarget}
-                    trigger={satelliteFocusTrigger}
-                    onComplete={handleFocusAnimationComplete}
-                  />
-                  <CMECameraShakeBurst active={impactBurstActive} />
-                  {/* Earth Bow-Shock / Magnetopause — Chapman-Ferraro density binding */}
-                  {currentPlanet === 'Earth' && (() => {
-                    const earthRef = planetRefs?.get('Earth');
-                    const pos = earthRef ? new THREE.Vector3().setFromMatrixPosition(earthRef.matrixWorld) : new THREE.Vector3(60, 0, 0);
-                    const posArr: [number, number, number] = [pos.x, pos.y, pos.z];
-                    return (
-                      <>
-                        {shouldRenderEarthBowShock && (
-                          <EarthBowShock
-                            earthPos={pos}
-                            cmeActive={cmeActive || cmeImpactActive}
-                            kpIndex={telemetry.kpIndex ?? 0}
-                            sunDirection={new THREE.Vector3(1, 0, 0)}
-                            solarWindDensity={syntheticCME?.density ?? noaaDonki.bundle?.density ?? 5}
-                            solarWindSpeed={syntheticCME?.speed ?? noaaDonki.bundle?.speed ?? 450}
-                          />
-                        )}
-                        {/* Live cloud layer on Earth */}
-                        <EarthCloudLayer
-                          earthPos={pos}
-                          visible={shouldRenderEarthCloudLayer}
-                          owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
-                          opacity={weatherOpacity.cloud}
-                          currentDate={effectiveDate}
-                          isLiveMode={currentDate === 'LIVE'}
-                        />
-                        <EarthWeatherLayers
-                          earthPos={pos}
-                          visible={shouldRenderEarthWeatherLayers}
-                          owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
-                          opacityPrecip={weatherOpacity.precip}
-                          opacitySnow={weatherOpacity.snow}
-                          opacityWind={weatherOpacity.wind}
-                          showPrecip={weatherVisibility.precip}
-                          showSnow={weatherVisibility.snow}
-                          showWind={weatherVisibility.wind}
-                          currentDate={effectiveDate}
-                          isLiveMode={currentDate === 'LIVE'}
-                        />
-                        <EarthWindStreamlines
-                          earthPos={pos}
-                          visible={shouldRenderEarthWindStreamlines}
-                          opacity={weatherOpacity.stream}
-                          streamCount={liteMode ? 60 : earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
-                          speedScale={Math.max(0.35, surfaceWindKmh / 24)}
-                          currentDate={effectiveDate}
-                          isLiveMode={currentDate === 'LIVE'}
-                        />
-                        <EarthCutawayExplorer
-                          earthPos={pos}
-                          visible={cutawayEnabled && (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL')}
-                          sliceEnabled={cutawaySliceEnabled}
-                          sliceDepth={cutawaySliceDepth}
-                          showCrust={cutawayShells.crust}
-                          showMantle={cutawayShells.mantle}
-                          showOuterCore={cutawayShells.outerCore}
-                          showInnerCore={cutawayShells.innerCore}
-                        />
-                        {/* Real-time ISS orbital trail */}
-                        {showISS && <LiveISS earthPos={pos} visible={showISS} />}
-                        {/* Chicxulub K-Pg impact sequence */}
-                        <LazyChicxulubEvent
-                          earthPos={posArr}
-                          active={chicxulubActive}
-                          onComplete={handleChicxulubComplete}
-                        />
-                        {/* Carrington 1859 magnetic storm */}
-                        <LazyCarringtonSim earthPos={posArr} active={carringtonActive} />
-                        {/* Earth Core Dynamo — inner / outer core + dipole field lines */}
-                        <EarthCoreDynamo
-                          earthPos={posArr}
-                          visible={shouldRenderEarthCoreDynamo}
-                          kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 2}
-                        />
-                        {/* D-RAP Radio Blackout Heatmap — driven by live GOES X-ray flux */}
-                        <RadioBlackoutHeatmap
-                          earthPos={posArr}
-                          fluxWm2={goesFlux.fluxWm2}
-                          visible={blackoutVisible}
-                        />
-                      </>
-                    );
-                  })()}
-                </Suspense>
+              <LazyPlanetRenderer
+                onPlanetSelect={focusOnPlanet}
+                onFocusAnimationComplete={handleFocusAnimationComplete}
+                currentIntensity={telemetry.currentIntensity}
+                currentDate={effectiveDate}
+                isLiveMode={currentDate === 'LIVE'}
+                cmeOverdrive={cmeImpactActive}
+                standoffDistance={telemetry.standoffDistance}
+                onPlanetRefsReady={setPlanetRefs}
+                epochYear={useDeepTimeEpoch ? selectedEpochYear : undefined}
+                positionOverridesAu={highPrecisionModeEnabled ? highPrecisionVectors : undefined}
+                focusedPlanetName={currentPlanet}
+                kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
+                kesslerCascade={liveKesslerCascade}
+                auroraEnabled={!ecoMode}
+              />
+              {/* Apophis 2029 flyby orbit */}
+              <LazyApophisTracker visible={apophisVisible} epochYear={selectedEpochYear} />
+              <CameraTracker
+                targetName={trackedPlanetName}
+                planetRefs={planetRefs}
+                isEnabled={!!trackedPlanetName}
+                onManualOverride={() => {
+                  setTrackedPlanetName(null);
+                }}
+              />
+              <LazyCMEPropagationVisualizer
+                isActive={cmeActive}
+                speed={telemetry.windSpeed || 450}
+                onImpact={handleCmeImpact}
+              />
+              {trackedObject && (
+                <SatelliteOrbitalTracker
+                  planetPosition={trackedObject.hostPosition}
+                  planetRadius={trackedObject.hostRadius}
+                  standoffDistance={telemetry.standoffDistance}
+                />
               )}
+              <SatelliteCameraFocus
+                target={satelliteFocusTarget}
+                trigger={satelliteFocusTrigger}
+                onComplete={handleFocusAnimationComplete}
+              />
+              <CMECameraShakeBurst active={impactBurstActive} />
+              {/* Earth Bow-Shock / Magnetopause — Chapman-Ferraro density binding */}
+              {currentPlanet === 'Earth' && (() => {
+                const earthRef = planetRefs?.get('Earth');
+                const pos = earthRef ? new THREE.Vector3().setFromMatrixPosition(earthRef.matrixWorld) : new THREE.Vector3(60, 0, 0);
+                const posArr: [number, number, number] = [pos.x, pos.y, pos.z];
+                return (
+                  <>
+                    {shouldRenderEarthBowShock && (
+                      <EarthBowShock
+                        earthPos={pos}
+                        cmeActive={cmeActive || cmeImpactActive}
+                        kpIndex={telemetry.kpIndex ?? 0}
+                        sunDirection={new THREE.Vector3(1, 0, 0)}
+                        solarWindDensity={syntheticCME?.density ?? noaaDonki.bundle?.density ?? 5}
+                        solarWindSpeed={syntheticCME?.speed ?? noaaDonki.bundle?.speed ?? 450}
+                      />
+                    )}
+                    {/* Live cloud layer on Earth */}
+                    <EarthCloudLayer
+                      earthPos={pos}
+                      visible={shouldRenderEarthCloudLayer}
+                      owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
+                      opacity={weatherOpacity.cloud}
+                      currentDate={effectiveDate}
+                      isLiveMode={currentDate === 'LIVE'}
+                    />
+                    <EarthWeatherLayers
+                      earthPos={pos}
+                      visible={shouldRenderEarthWeatherLayers}
+                      owmApiKey={import.meta.env.VITE_OPENWEATHER_API_KEY}
+                      opacityPrecip={weatherOpacity.precip}
+                      opacitySnow={weatherOpacity.snow}
+                      opacityWind={weatherOpacity.wind}
+                      showPrecip={weatherVisibility.precip}
+                      showSnow={weatherVisibility.snow}
+                      showWind={weatherVisibility.wind}
+                      currentDate={effectiveDate}
+                      isLiveMode={currentDate === 'LIVE'}
+                    />
+                    <EarthWindStreamlines
+                      earthPos={pos}
+                      visible={shouldRenderEarthWindStreamlines}
+                      opacity={weatherOpacity.stream}
+                      streamCount={liteMode ? 60 : earthLodStage === 'LOCAL' ? 280 : earthLodStage === 'REGIONAL' ? 180 : 110}
+                      speedScale={Math.max(0.35, surfaceWindKmh / 24)}
+                      currentDate={effectiveDate}
+                      isLiveMode={currentDate === 'LIVE'}
+                    />
+                    <EarthCutawayExplorer
+                      earthPos={pos}
+                      visible={cutawayEnabled && (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL')}
+                      sliceEnabled={cutawaySliceEnabled}
+                      sliceDepth={cutawaySliceDepth}
+                      showCrust={cutawayShells.crust}
+                      showMantle={cutawayShells.mantle}
+                      showOuterCore={cutawayShells.outerCore}
+                      showInnerCore={cutawayShells.innerCore}
+                    />
+                    {/* Real-time ISS orbital trail */}
+                    {showISS && <LiveISS earthPos={pos} visible={showISS} />}
+                    {/* Chicxulub K-Pg impact sequence */}
+                    <LazyChicxulubEvent
+                      earthPos={posArr}
+                      active={chicxulubActive}
+                      onComplete={handleChicxulubComplete}
+                    />
+                    {/* Carrington 1859 magnetic storm */}
+                    <LazyCarringtonSim earthPos={posArr} active={carringtonActive} />
+                    {/* Earth Core Dynamo — inner / outer core + dipole field lines */}
+                    <EarthCoreDynamo
+                      earthPos={posArr}
+                      visible={shouldRenderEarthCoreDynamo}
+                      kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 2}
+                    />
+                    {/* D-RAP Radio Blackout Heatmap — driven by live GOES X-ray flux */}
+                    <RadioBlackoutHeatmap
+                      earthPos={posArr}
+                      fluxWm2={goesFlux.fluxWm2}
+                      visible={blackoutVisible}
+                    />
+                  </>
+                );
+              })()}
             </Suspense>
 
-            <OrbitControls enablePan enableZoom enableDamping dampingFactor={0.08} makeDefault minDistance={0.001} maxDistance={100000} maxPolarAngle={viewMode === 'SURFACE' ? Math.PI / 1.95 : Math.PI} />
+            <OrbitControls enablePan enableZoom enableDamping dampingFactor={0.08} makeDefault minDistance={0.001} maxDistance={100000} maxPolarAngle={Math.PI} />
             <SurfaceCameraController
-              enabled={viewMode === 'SURFACE'}
+              enabled={false}
               onAltitudeChange={setSurfaceAltitudeKm}
               sampleTerrainHeight={(x, z) => terrainSamplerRef.current(x, z)}
             />
@@ -2277,8 +2175,8 @@ export default function App() {
                 });
               }}
             >
-              <span className="text-[8px] uppercase tracking-[0.18em] text-cyan-400/80">Ask Sköll</span>
-              <span className="ml-1 text-[9px] uppercase tracking-[0.1em] text-cyan-100">/ to query live systems</span>
+              <span className="leading-tight text-[8px] uppercase tracking-[0.12em] text-cyan-400/90">Mission Control</span>
+              <span className="ml-1 leading-tight text-[9px] uppercase tracking-[0.08em] text-cyan-100/95 truncate">/ open live tools</span>
             </button>
             <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-4">
               <MissionUTCTime />
@@ -2297,7 +2195,9 @@ export default function App() {
                 title={trackedPlanetName ? 'Unlock camera follow (U)' : `Re-lock follow to ${currentPlanet ?? 'Earth'} (F)`}
                 aria-label={trackedPlanetName ? 'Unlock camera follow' : 'Re-lock camera follow'}
               >
-                {trackedPlanetName ? 'Unlock' : 'Re-lock'}
+                {trackedPlanetName
+                  ? <><Unlock size={10} className="inline mr-0.5" />Unlock</>
+                  : <><Lock size={10} className="inline mr-0.5" />Re-lock</>}
               </button>
             </div>
             <div className="aurora-command-pill min-w-0 flex items-center gap-2 justify-start md:justify-end">
@@ -2471,29 +2371,8 @@ export default function App() {
                     title="More tools"
                     aria-label="More tools"
                   >
-                    ⋯
+                    <Activity size={14} />
                   </button>
-                {/* Left dock modal — absolute, opens to the right of the icon column */}
-                {dockModalSide === 'left' && dockModalTileId && (
-                  <motion.div
-                    ref={dockPanelRef}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -12 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="nasa-slate skoll-slate-shell skoll-floating-popover absolute left-full ml-2 top-0 z-50 w-80 max-w-[min(92vw,22rem)] p-3 pointer-events-auto"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                        {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
-                      </div>
-                      <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
-                    </div>
-                    <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
-                      {renderSubmenuContent(dockModalTileId)}
-                    </div>
-                  </motion.div>
-                )}
                 </div>
 
                 <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2 pointer-events-auto overflow-visible">
@@ -2531,7 +2410,7 @@ export default function App() {
                     title="More tools"
                     aria-label="More tools"
                   >
-                    ⋯
+                    <Activity size={14} />
                   </button>
 
                   {/* Right dock modal — absolute, opens to the left of the icon column */}
@@ -2542,7 +2421,7 @@ export default function App() {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 12 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="nasa-slate skoll-slate-shell skoll-floating-popover absolute right-full mr-2 top-0 z-50 w-80 max-w-[min(92vw,22rem)] p-3 pointer-events-auto"
+                      className="nasa-slate skoll-slate-shell skoll-floating-popover absolute right-full mr-2 top-0 z-50 w-[min(94vw,30rem)] max-w-[30rem] p-3.5 pointer-events-auto"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
@@ -2550,7 +2429,7 @@ export default function App() {
                         </div>
                         <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
                       </div>
-                      <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
+                      <div className="max-h-[76vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1.5 text-[11px]">
                         {renderSubmenuContent(dockModalTileId)}
                       </div>
                     </motion.div>
@@ -2619,337 +2498,245 @@ export default function App() {
                 <div className="mt-1 text-[8px] uppercase tracking-[0.08em] text-cyan-300/80">Zoom {earthZoomDistance.toFixed(2)} u • {earthLodStage}</div>
               </div>
             )}
-            <LandingSlate planetName={viewMode === 'HELIOCENTRIC' ? currentPlanet : null} onInitiateLanding={() => setViewMode('SURFACE')} />
             <MagneticReversalAlert active={selectedEpochYear <= -66000000} />
-
-            {viewMode === 'SURFACE' && (
-              <>
-                <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ insetBlockStart: 12 }}>Exit Landing</button>
-                <div className="absolute left-6 pointer-events-none rounded border border-cyan-500/30 bg-black/70 px-3 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100" style={{ insetBlockStart: 12 }}>
-                  Altitude {surfaceAltitudeKm.toFixed(2)} km
-                </div>
-              </>
-            )}
-
-            {toasts.length > 0 && (
-              <div className="pointer-events-none fixed right-3 z-[120] flex w-[min(92vw,22rem)] flex-col gap-1" style={{ insetBlockStart: controlBarHeight + 12 }}>
-                {toasts.slice(0, 4).map((toast) => (
-                  <div
-                    key={`${toast.id}-${toast.ts}`}
-                    className={`rounded border px-2 py-1 text-[9px] uppercase tracking-[0.08em] backdrop-blur-sm ${toast.severity === 'critical'
-                      ? 'border-red-400/60 bg-red-500/20 text-red-100'
-                      : toast.severity === 'warning'
-                        ? 'border-amber-400/60 bg-amber-500/20 text-amber-100'
-                        : 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'}`}
-                  >
-                    <div className="font-semibold">{toast.severity}</div>
-                    <div className="opacity-90">{toast.message}</div>
-                  </div>
-                ))}
+            <div className="fixed bottom-[calc(var(--time-explorer-height)+0.5rem)] right-3 sm:right-4 z-[99] pointer-events-auto select-none flex flex-col items-end gap-1.5">
+              <SlateErrorBoundary moduleName="KesslerTelemetryChip">
+                <KesslerTelemetryChip
+                  next24hProbability={liveKesslerCascade?.next24hProbability ?? null}
+                  angularScale={kesslerAngularScale}
+                />
+              </SlateErrorBoundary>
+              <div className="rounded-md border border-cyan-500/35 bg-black/50 px-2 py-1 backdrop-blur-md text-[8px] uppercase tracking-[0.08em] text-cyan-200 font-mono">
+                <span className="telemetry-value">FPS {fps}</span>
+                <span className="mx-1 text-cyan-500/40">|</span>
+                <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
+                <span className="mx-1 text-cyan-500/40">|</span>
+                <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
               </div>
-            )}
+            </div>
+
+            <div
+              ref={timeExplorerRef}
+              className="time-explorer fixed inset-x-0 bottom-0 z-[9998] pointer-events-auto"
+            >
+              <div className="mx-auto max-w-[1280px] px-4 py-1.5 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-3 text-[9px] uppercase tracking-[0.12em] text-cyan-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimePlaying(false);
+                      setCurrentDate('LIVE');
+                      setSelectedEpochYear(new Date().getUTCFullYear());
+                      setUseDeepTimeEpoch(false);
+                    }}
+                    className={`timeline-status-link inline-flex items-center gap-1.5 ${currentDate === 'LIVE' ? 'is-live' : 'is-historical'}`}
+                  >
+                    <span className="time-live-dot" />
+                    {currentDate === 'LIVE' ? 'LIVE' : `VIEWING ${formatTimelineDate(effectiveDate)}`}
+                  </button>
+                  <div className="min-w-0 truncate">{formatTimelineDate(effectiveDate)}</div>
+                  <div>{playbackRate === 1 ? 'REAL RATE' : `${playbackRate}X`}</div>
+                  <div className="shrink-0">{formatTimelineTime(nowUtc)} UTC</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimePlaying(false);
+                      setCurrentDate('LIVE');
+                      setSelectedEpochYear(new Date().getUTCFullYear());
+                    }}
+                    className="timeline-mini-link"
+                  >
+                    NOW
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimePlaying(false);
+                      handleMasterReset();
+                      setCurrentDate('LIVE');
+                      setSelectedEpochYear(new Date().getUTCFullYear());
+                      setUseDeepTimeEpoch(false);
+                    }}
+                    className="timeline-mini-link"
+                  >
+                    RESET
+                  </button>
+                </div>
+
+                <div
+                  className="time-track px-1"
+                  onWheel={(event) => {
+                    event.preventDefault();
+                    setIsTimePlaying(true);
+                    setPlaybackRate((prev) => {
+                      const delta = event.deltaY < 0 ? 1 : -1;
+                      const next = Math.max(-20, Math.min(20, prev + delta));
+                      return next === 0 ? (delta > 0 ? 1 : -1) : next;
+                    });
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setTimelineContextMenu({ x: event.clientX, y: event.clientY });
+                  }}
+                >
+                  <input
+                    type="range"
+                    className="time-explorer-slider"
+                    min={sliderMinMs}
+                    max={sliderMaxMs}
+                    step={60_000}
+                    value={sliderValueMs}
+                    onChange={(event) => {
+                      setIsTimePlaying(false);
+                      setViewingDate(new Date(Number(event.currentTarget.value)));
+                    }}
+                    aria-label="Time explorer slider"
+                  />
+                </div>
+
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    className="transport-btn"
+                    onClick={() => shiftViewingDate(0, -1, 0)}
+                    onDoubleClick={() => shiftViewingDate(0, 0, -1)}
+                    onMouseDown={() => startHoldScrub(-1, 0, 0, 120)}
+                    onMouseUp={stopHoldScrub}
+                    onMouseLeave={stopHoldScrub}
+                  >
+                    ◄◄
+                  </button>
+                  <button
+                    type="button"
+                    className="transport-btn"
+                    onClick={() => shiftViewingDate(-1, 0, 0)}
+                    onMouseDown={() => startHoldScrub(-1, 0, 0, 150)}
+                    onMouseUp={stopHoldScrub}
+                    onMouseLeave={stopHoldScrub}
+                  >
+                    ◄
+                  </button>
+                  <button
+                    type="button"
+                    className="transport-play"
+                    onClick={() => {
+                      setIsTimePlaying((prev) => !prev);
+                      if (currentDate === 'LIVE') {
+                        setViewingDate(new Date());
+                      }
+                    }}
+                  >
+                    {isTimePlaying ? '❚❚' : '▶'}
+                  </button>
+                  <button
+                    type="button"
+                    className="transport-btn"
+                    onClick={() => shiftViewingDate(1, 0, 0)}
+                    onMouseDown={() => startHoldScrub(1, 0, 0, 150)}
+                    onMouseUp={stopHoldScrub}
+                    onMouseLeave={stopHoldScrub}
+                  >
+                    ►
+                  </button>
+                  <button
+                    type="button"
+                    className="transport-btn"
+                    onClick={() => shiftViewingDate(0, 1, 0)}
+                    onDoubleClick={() => shiftViewingDate(0, 0, 1)}
+                    onMouseDown={() => startHoldScrub(1, 0, 0, 120)}
+                    onMouseUp={stopHoldScrub}
+                    onMouseLeave={stopHoldScrub}
+                  >
+                    ►►
+                  </button>
+                </div>
+
+                {timelineContextMenu && (
+                  <div
+                    className="fixed z-[10020] rounded border border-cyan-500/35 bg-black/90 p-1 min-w-[180px]"
+                    style={{ insetInlineStart: timelineContextMenu.x, insetBlockStart: timelineContextMenu.y }}
+                  >
+                    <button
+                      type="button"
+                      className="timeline-context-item"
+                      onClick={() => {
+                        const input = window.prompt('Go to date (UTC ISO format):', effectiveDate.toISOString().slice(0, 10));
+                        if (input) {
+                          const parsed = new Date(`${input}T00:00:00Z`);
+                          if (!Number.isNaN(parsed.getTime())) {
+                            setViewingDate(parsed);
+                          }
+                        }
+                        setTimelineContextMenu(null);
+                      }}
+                    >
+                      Go to date...
+                    </button>
+                    <button
+                      type="button"
+                      className="timeline-context-item"
+                      onClick={() => {
+                        shiftViewingDate(0, 0, -1);
+                        setTimelineContextMenu(null);
+                      }}
+                    >
+                      Jump back 1 year
+                    </button>
+                    <button
+                      type="button"
+                      className="timeline-context-item"
+                      onClick={() => {
+                        shiftViewingDate(0, 0, 1);
+                        setTimelineContextMenu(null);
+                      }}
+                    >
+                      Jump forward 1 year
+                    </button>
+                    <button
+                      type="button"
+                      className="timeline-context-item"
+                      onClick={() => setTimelineContextMenu(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>
 
+      {/* Scene Discovery Guide — explains every 3D element to any user */}
       {booted && (
-        <>
-          <AnimatePresence initial={false}>
-            {openMenuId && createPortal(
-              <motion.div
-                ref={commandMenuRef}
-                key={openMenuId}
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-                className="nasa-slate skoll-slate-shell skoll-floating-popover fixed z-[110] pointer-events-auto w-[min(92vw,720px)] min-w-[320px] sm:min-w-[420px] p-2"
-                style={commandMenuAnchor
-                  ? {
-                      insetBlockStart: commandMenuAnchor.insetBlockStart,
-                      insetInlineStart: commandMenuAnchor.insetInlineStart,
-                    }
-                  : {
-                      insetBlockStart: controlBarHeight + 8,
-                      insetInlineStart: 16,
-                    }}
-              >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex-1 space-y-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                      {[
-                        { id: 'live-telemetry', label: 'Live Telemetry' },
-                        { id: 'ml-forecasts', label: 'ML Forecasts' },
-                        { id: 'simulations', label: 'Simulations' },
-                        { id: 'all-tools', label: 'All Tools' },
-                      ].map((group) => (
-                        <button
-                          key={group.id}
-                          type="button"
-                          onClick={() => {
-                            setOpenMenuId(group.id);
-                            const groupIds = menuGroups[group.id] ?? [];
-                            if (groupIds.length > 0) {
-                              setActiveSubTileId(groupIds[0]);
-                            }
-                          }}
-                          className={`rounded-md border px-2 py-1.5 text-left ${openMenuId === group.id ? 'border-cyan-300 bg-cyan-500/10' : 'border-cyan-500/25 bg-black/20 hover:bg-cyan-500/5'}`}
-                        >
-                          <div className="text-[8px] uppercase tracking-[0.18em] text-cyan-500/70">Category</div>
-                          <div className="text-[9px] uppercase tracking-[0.1em] text-cyan-100">{group.label}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1 max-h-[22vh] overflow-y-auto wolf-scroll">
-                      {(menuGroups[openMenuId] ?? []).map((tileId) => (
-                        <button
-                          key={tileId}
-                          type="button"
-                          onClick={() => {
-                            setSelectedTileId(tileId);
-                            setActiveSubTileId(tileId);
-                          }}
-                          className={`h-10 px-2 rounded border text-[8px] uppercase tracking-[0.14em] text-left ${activeSubTileId === tileId ? 'border-cyan-300 text-cyan-100 bg-cyan-500/10' : 'border-cyan-500/30 text-cyan-300/90 hover:bg-cyan-500/10'}`}
-                        >
-                          <span className="line-clamp-2 skoll-menu-tile-label">{tileCatalog.find((tile) => tile.id === tileId)?.label ?? tileId}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpenMenuId(null);
-                      setCommandMenuAnchor(null);
-                    }}
-                    className="skoll-circle-action skoll-circle-action-danger shrink-0"
-                    aria-label="Close menu"
-                    title="Close"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="max-h-[34vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
-                    {renderSubmenuContent(activeSubTileId)}
-                </div>
-              </motion.div>,
-              document.body,
-            )}
-          </AnimatePresence>
-
-          <div className="fixed bottom-[calc(var(--time-explorer-height)+0.5rem)] right-3 sm:right-4 z-[99] pointer-events-auto select-none flex flex-col items-end gap-1.5">
-            <SlateErrorBoundary moduleName="KesslerTelemetryChip">
-              <KesslerTelemetryChip
-                next24hProbability={liveKesslerCascade?.next24hProbability ?? null}
-                angularScale={kesslerAngularScale}
-              />
-            </SlateErrorBoundary>
-            <div className="rounded-md border border-cyan-500/35 bg-black/50 px-2 py-1 backdrop-blur-md text-[8px] uppercase tracking-[0.08em] text-cyan-200 font-mono">
-              <span className="telemetry-value">FPS {fps}</span>
-              <span className="mx-1 text-cyan-500/40">|</span>
-              <span className="telemetry-value">LSTM {lstmLatencyMs != null ? `${lstmLatencyMs}ms` : '—'}</span>
-              <span className="mx-1 text-cyan-500/40">|</span>
-              <span className="telemetry-value">NOAA {noaaFetchAgeSec != null ? `${noaaFetchAgeSec}s` : '—'}</span>
-            </div>
-          </div>
-
-          <div
-            ref={timeExplorerRef}
-            className="time-explorer fixed inset-x-0 bottom-0 z-[9998] pointer-events-auto"
-          >
-            <div className="mx-auto max-w-[1280px] px-4 py-1.5 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-3 text-[9px] uppercase tracking-[0.12em] text-cyan-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimePlaying(false);
-                    setCurrentDate('LIVE');
-                    setSelectedEpochYear(new Date().getUTCFullYear());
-                    setUseDeepTimeEpoch(false);
-                  }}
-                  className={`timeline-status-link inline-flex items-center gap-1.5 ${currentDate === 'LIVE' ? 'is-live' : 'is-historical'}`}
-                >
-                  <span className="time-live-dot" />
-                  {currentDate === 'LIVE' ? 'LIVE' : `VIEWING ${formatTimelineDate(effectiveDate)}`}
-                </button>
-                <div className="min-w-0 truncate">{formatTimelineDate(effectiveDate)}</div>
-                <div>{playbackRate === 1 ? 'REAL RATE' : `${playbackRate}X`}</div>
-                <div className="shrink-0">{formatTimelineTime(nowUtc)} UTC</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimePlaying(false);
-                    setCurrentDate('LIVE');
-                    setSelectedEpochYear(new Date().getUTCFullYear());
-                  }}
-                  className="timeline-mini-link"
-                >
-                  NOW
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimePlaying(false);
-                    handleMasterReset();
-                    setCurrentDate('LIVE');
-                    setSelectedEpochYear(new Date().getUTCFullYear());
-                    setUseDeepTimeEpoch(false);
-                  }}
-                  className="timeline-mini-link"
-                >
-                  RESET
-                </button>
-              </div>
-
-              <div
-                className="time-track px-1"
-                onWheel={(event) => {
-                  event.preventDefault();
-                  setIsTimePlaying(true);
-                  setPlaybackRate((prev) => {
-                    const delta = event.deltaY < 0 ? 1 : -1;
-                    const next = Math.max(-20, Math.min(20, prev + delta));
-                    return next === 0 ? (delta > 0 ? 1 : -1) : next;
-                  });
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setTimelineContextMenu({ x: event.clientX, y: event.clientY });
-                }}
-              >
-                <input
-                  type="range"
-                  className="time-explorer-slider"
-                  min={sliderMinMs}
-                  max={sliderMaxMs}
-                  step={60_000}
-                  value={sliderValueMs}
-                  onChange={(event) => {
-                    setIsTimePlaying(false);
-                    setViewingDate(new Date(Number(event.currentTarget.value)));
-                  }}
-                  aria-label="Time explorer slider"
-                />
-              </div>
-
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="transport-btn"
-                  onClick={() => shiftViewingDate(0, -1, 0)}
-                  onDoubleClick={() => shiftViewingDate(0, 0, -1)}
-                  onMouseDown={() => startHoldScrub(-1, 0, 0, 120)}
-                  onMouseUp={stopHoldScrub}
-                  onMouseLeave={stopHoldScrub}
-                >
-                  ◄◄
-                </button>
-                <button
-                  type="button"
-                  className="transport-btn"
-                  onClick={() => shiftViewingDate(-1, 0, 0)}
-                  onMouseDown={() => startHoldScrub(-1, 0, 0, 150)}
-                  onMouseUp={stopHoldScrub}
-                  onMouseLeave={stopHoldScrub}
-                >
-                  ◄
-                </button>
-                <button
-                  type="button"
-                  className="transport-btn transport-play"
-                  onClick={() => {
-                    setIsTimePlaying((prev) => !prev);
-                    if (currentDate === 'LIVE') {
-                      setViewingDate(new Date());
-                    }
-                  }}
-                >
-                  {isTimePlaying ? '❚❚' : '▶'}
-                </button>
-                <button
-                  type="button"
-                  className="transport-btn"
-                  onClick={() => shiftViewingDate(1, 0, 0)}
-                  onMouseDown={() => startHoldScrub(1, 0, 0, 150)}
-                  onMouseUp={stopHoldScrub}
-                  onMouseLeave={stopHoldScrub}
-                >
-                  ►
-                </button>
-                <button
-                  type="button"
-                  className="transport-btn"
-                  onClick={() => shiftViewingDate(0, 1, 0)}
-                  onDoubleClick={() => shiftViewingDate(0, 0, 1)}
-                  onMouseDown={() => startHoldScrub(1, 0, 0, 120)}
-                  onMouseUp={stopHoldScrub}
-                  onMouseLeave={stopHoldScrub}
-                >
-                  ►►
-                </button>
-              </div>
-
-              {timelineContextMenu && (
-                <div
-                  className="fixed z-[10020] rounded border border-cyan-500/35 bg-black/90 p-1 min-w-[180px]"
-                  style={{ insetInlineStart: timelineContextMenu.x, insetBlockStart: timelineContextMenu.y }}
-                >
-                  <button
-                    type="button"
-                    className="timeline-context-item"
-                    onClick={() => {
-                      const input = window.prompt('Go to date (UTC ISO format):', effectiveDate.toISOString().slice(0, 10));
-                      if (input) {
-                        const parsed = new Date(`${input}T00:00:00Z`);
-                        if (!Number.isNaN(parsed.getTime())) {
-                          setViewingDate(parsed);
-                        }
-                      }
-                      setTimelineContextMenu(null);
-                    }}
-                  >
-                    Go to date...
-                  </button>
-                  <button
-                    type="button"
-                    className="timeline-context-item"
-                    onClick={() => {
-                      shiftViewingDate(0, 0, -1);
-                      setTimelineContextMenu(null);
-                    }}
-                  >
-                    Jump back 1 year
-                  </button>
-                  <button
-                    type="button"
-                    className="timeline-context-item"
-                    onClick={() => {
-                      shiftViewingDate(0, 0, 1);
-                      setTimelineContextMenu(null);
-                    }}
-                  >
-                    Jump forward 1 year
-                  </button>
-                  <button
-                    type="button"
-                    className="timeline-context-item"
-                    onClick={() => setTimelineContextMenu(null)}
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+        <SceneLegend
+          kpIndex={telemetry.kpIndex}
+          solarWindSpeed={telemetry.windSpeed}
+          flareClass={goesFlux.flareClass}
+        />
       )}
 
-      {!booted && (
+      {!booted && retroMode && (
         <SlateErrorBoundary
           moduleName="RetroBoot"
           fallback={null}
         >
           <RetroBoot
+            onComplete={() => {
+              setBooted(true);
+              setViewMode('HELIOCENTRIC');
+            }}
+          />
+        </SlateErrorBoundary>
+      )}
+
+      {!booted && !retroMode && (
+        <SlateErrorBoundary
+          moduleName="NeuralBoot"
+          fallback={null}
+        >
+          <NeuralBoot
+            isLoaded={texturesLoaded && telemetry.kp !== undefined}
             onComplete={() => {
               setBooted(true);
               setViewMode('HELIOCENTRIC');

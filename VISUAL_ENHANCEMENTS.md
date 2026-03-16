@@ -1,5 +1,7 @@
 # 🌌 Sköll Visual Enhancement Summary
 
+> Last updated: March 2026. All sections below reflect **actually shipped** code. Items previously listed as "future ideas" that are now implemented have been moved to their correct sections.
+
 ## Major Visual Upgrades Implemented
 
 ### 0. **Operational HUD Intelligence Layer** 🧠
@@ -191,14 +193,95 @@
 - Additive blending (no depth sorting needed)
 - Conditional rendering (flares only during activity)
 - Instanced materials (shared across similar objects)
+- **Star/nebula frame throttle**: shader `uTime` updates every 3 frames (not every frame)
+- **Shadow map on-demand**: `gl.shadowMap.autoUpdate = false`, recomputed on significant position changes
+- **Static shell matrix culling**: `matrixAutoUpdate = false` on `HeliopauseShell`, `OortCloud`, `KuiperBelt`
+- **Adaptive DPR**: 0.9–1.5 range, throttled at 800ms intervals, jitter threshold 0.012
 
-**Expected Performance**: Smooth 60fps on modern GPUs (RTX 2060+, M1+)
+**Expected Performance**: Smooth 60fps on modern GPUs (RTX 2060+, M1+). On lower-end hardware use Lite or Eco mode.
+
+---
+
+## Additional Visual Systems (Shipped After Initial Doc)
+
+### 7. **Earth Live Weather Overlay** 🌦️
+
+**Files**: `EarthWeatherLayers.tsx`, `EarthWindStreamlines.tsx`, `EarthWeatherNow.tsx`
+
+- Real-time OWM precipitation, snow, and wind layers on Earth sphere
+- Streamline animation showing global wind patterns
+- LOD distance-fade (120–420 units) to prevent z-fighting when zoomed out
+- Per-layer opacity controls via `WeatherLayerControls`
+
+### 8. **Earth Bow Shock** 🔷
+
+**File**: `EarthBowShock.tsx`
+
+- Dynamic mesh blunt-body bow-shock geometry
+- Scales with live solar wind pressure
+- Combines with `MagneticTailVisualizer` for complete magnetosphere picture
+
+### 9. **CME Propagation Visualizer** 💨
+
+**File**: `CMEPropagationVisualizer.tsx`
+
+- Radial shock-front particle burst from Sun outward
+- Turbulent particle spray during impact at Earth orbit
+- Lazy-loaded to avoid startup cost
+
+### 10. **Kessler Threat Net** 🔴
+
+**File**: `KesslerThreatNet.tsx`
+
+- Probabilistic debris-density shell around Earth
+- Driven by live Kessler cascade probability from LSTM worker
+- Angular scale driven by `next7dProbability` forecast
+
+### 11. **Earth Cutaway Explorer** ⛏️
+
+**File**: `EarthCutawayExplorer.tsx`
+
+- Crust / mantle / outer core / inner core slice planes
+- Orbit-controlled depth scrubber
+- Visible in close-zoom Earth orbit mode
+
+### 12. **Cinematic Post-Processing** 🎬
+
+**File**: `CinematicPostFX.tsx`
+
+- Bloom, vignette, chromatic aberration via `@react-three/postprocessing`
+- LOW / HIGH quality toggle in command bar
+- Lazy-loaded; only activates in HIGH mode
+
+### 13. **Asteroid Belt + Kuiper Belt + Oort Cloud** ☄️
+
+**Files**: `AsteroidBelt.tsx`, `KuiperBelt.tsx`, `OortCloud.tsx`
+
+- Particle rings at realistic AU distances
+- LOD-disabled beyond camera frustum to reduce fill rate
+- Additive blending, no depth write
+
+### 14. **Local Interstellar Cloud + Heliosphere** 🌐
+
+**Files**: `LocalInterstellarCloud.tsx`, `HeliopauseShell.tsx`
+
+- Warm LIC shell enveloping the outer heliosphere
+- User-toggled heliopause boundary marker
+- `matrixAutoUpdate = false` for zero per-frame overhead on static geometry
+
+### 15. **Historical Event Simulations** 📜
+
+**Files**: `CarringtonSim.tsx`, `ChicxulubEvent.tsx`, `ApophisTracker.tsx`
+
+- Carrington 1859: full scene redline, corona flare, telegraph-failure narrative
+- Chicxulub: geological impact visualisation with ejecta
+- Apophis 2029: precise orbital close-approach trajectory
 
 ---
 
 ## Visual Comparison
 
-### Before
+### Before (v1)
 
 - Solid cone magnetotails
 - Basic star points
@@ -206,26 +289,33 @@
 - No atmospheric effects
 - No orbital guides
 
-### After
+### After (March 2026)
 
 - ✅ Wispy plasma streamers flowing into magnetotails
-- ✅ 15K stars with realistic colors + 3K nebula clouds
-- ✅ Dynamic sun with corona tendrils and flare particles
-- ✅ Atmospheric halos on all planets with atmospheres
-- ✅ Orbital path trails (cyan inner, purple outer)
-- ✅ Everything responds to solar activity and historical events
+- ✅ 15K stars with temperature-correct colors + 3K nebula clouds
+- ✅ Dynamic sun with animated corona tendrils and activity-driven flare particles
+- ✅ Atmospheric halos on all planets with atmospheres (Fresnel scattering)
+- ✅ Orbital path trails (cyan inner planets / purple outer planets)
+- ✅ Live weather overlays on Earth (OWM precipitation, snow, wind streamlines)
+- ✅ Earth bow shock, magnetotail, cutaway explorer, core dynamo
+- ✅ CME propagation shock-front particles
+- ✅ Kessler threat field orbital shell
+- ✅ Asteroid Belt, Kuiper Belt, Oort Cloud, Local Interstellar Cloud
+- ✅ All historical events trigger matching extreme visuals
+- ✅ Cinematic post-processing (bloom, chromatic aberration, vignette)
 
 ---
 
 ## How to See Maximum Visual Impact
 
-1. **Select Carrington Event** (1859) from Timeline
+1. **Select Carrington Event** (1859) from the Timeline
 2. **Watch**:
-   - Sun erupts with red flare particles
-   - Corona intensifies to deep red
-   - Flare ring appears around sun
+   - Sun erupts with deep-red flare particles
+   - Corona intensifies and swirls faster
    - Magnetotails compress and brighten
-   - Planet atmospheres pulse with solar wind
+   - Planet atmospheres pulse with solar wind pressure
+3. **Zoom to Earth**, enable cutaway mode to see interior core dynamo
+4. **Enable Live Weather** to see OWM precipitation overlaid on the Earth sphere
 3. **Track Earth** to follow magnetotail deformation
 4. **Toggle to LIVE** to see normal calm state contrast
 

@@ -1,4 +1,6 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react';
+import { flareLabel, fluxAriaLabel } from '../lib/a11y';
+import { PanelDescription } from './PanelDescription';
 
 /**
  * GOESFluxChart.tsx
@@ -185,6 +187,10 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
   const flareClass  = classifyFlare(latestFlux);
   const peakFlux    = Math.max(...longCh.filter((v) => v > 0), 0);
   const peakClass   = classifyFlare(peakFlux);
+  const { description: flareDescription } = flareLabel(flareClass.label);
+  const canvasAriaLabel = longCh.length > 0
+    ? fluxAriaLabel(latestFlux, shortCh.at(-1))
+    : 'GOES X-ray flux chart — data loading';
 
   return (
     <div
@@ -203,28 +209,44 @@ export default function GOESFluxChart({ showShortChannel = true }: GOESFluxChart
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px 6px', background: `linear-gradient(90deg,${ACCENT}10 0%,transparent 100%)`, borderBlockEnd: `1px solid ${ACCENT}22` }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: flareClass.color, display: 'inline-block', boxShadow: `0 0 6px ${flareClass.color}` }} />
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: flareClass.color, display: 'inline-block', boxShadow: `0 0 6px ${flareClass.color}` }} aria-hidden="true" />
         <span style={{ fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT, opacity: 0.85 }}>GOES X-Ray Flux</span>
+        <PanelDescription
+          id="goes-flux"
+          title="GOES X-ray Flux"
+          summary="Real-time X-ray energy output from the Sun, measured every minute by the GOES-16/18 satellites."
+          axes="Y-axis: flux intensity (W/m²) on a logarithmic scale from A-class (quiet) to X-class (extreme). X-axis: past 4 hours. Orange line = long channel 1–8 Å (standard); cyan = short channel 0.5–4 Å."
+          whyItMatters="X-ray flares can black out HF radio communications across the entire sunlit hemisphere within 8 minutes of the flare peak. M-class and above trigger Radio Blackout alerts (NOAA scale R0–R5)."
+          live={longCh.length > 0 ? `Current: ${flareClass.label}-class — ${flareDescription.slice(0, 80)}…` : null}
+          size="xs"
+        />
         <span className="live-clock" style={{ fontSize: '7px', opacity: 0.35, marginInlineStart: 'auto', minInlineSize: '9ch' }}>
           {loading ? 'Syncing…' : lastFetch ? `${lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Pending'}
         </span>
       </div>
 
-      {/* Canvas chart */}
+      {/* Canvas chart — accessible via aria-label for screen readers */}
       <div style={{ padding: '6px 10px 0' }}>
         <canvas
           ref={canvasRef}
+          role="img"
+          aria-label={canvasAriaLabel}
           width={320}
           height={80}
           style={{ width: '100%', height: '80px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.06)', display: 'block' }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7px', opacity: 0.3, marginBlockStart: '2px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7px', opacity: 0.3, marginBlockStart: '2px' }} aria-hidden="true">
           <span>−4 h</span><span style={{ letterSpacing: '0.08em' }}>log flux (W/m²)</span><span>Now</span>
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', padding: '8px 10px 10px' }}>
+      {/* Stats — aria-live so screen readers announce updates */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={canvasAriaLabel}
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', padding: '8px 10px 10px' }}
+      >
         <div>
           <div style={{ fontSize: '7px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.07em', marginBlockEnd: 2 }}>Current flux</div>
           <div style={{ fontSize: '10px', fontWeight: 'bold', color: flareClass.color }}>{flareClass.label}-class</div>

@@ -2,121 +2,145 @@
 
 This plan converts strategic goals into phased, implementation-ready work for experts, students, and enthusiasts.
 
-## Phase 1 — NASA-Ready Completion (Immediate)
+## Phase 1 — NASA-Ready Completion ✅ Complete
 
-### 1) API Hardening
+### 1) API Hardening ✅
 
-Scope:
-- All external NOAA/DONKI/GOES endpoints in workers and hooks.
+- Standardised resilient fetch policy implemented (`src/workers/fetchPolicy.ts`).
+- Adopted in `noaaWorker.ts` and all DONKI/GOES hooks.
+- Schema validation guards in `noaaSchemas.ts`.
+- Endpoint outage degrades to fallback state (cached bundle + STALE badge) without UI crash.
 
-Actions:
-- Standardize resilient fetch policy (timeout + retry + schema guard + backoff).
-- Add endpoint capability flags and graceful degradation banners in HUD.
-- Add contract tests for telemetry decoding and fallback behavior.
+### 2) Performance Budget Pass ✅
 
-Acceptance:
-- No unhandled promise rejection from any telemetry endpoint.
-- Endpoint outage degrades to fallback state without UI crash.
-- Typed payload checks prevent malformed data from propagating to UI.
+- Adaptive DPR system (0.9–1.5 cap, throttled 800ms, jitter 0.012 threshold).
+- `PCFSoftShadowMap` with `autoUpdate = false`; recomputed on-demand.
+- Star/nebula `useFrame` throttle (every 3 frames for shader animation).
+- `matrixAutoUpdate = false` on static scene shells.
+- Distance-LOD fade on all transparent Earth overlays.
+- Exponential temporal interpolation on all planetary/moon orbital positions.
+- `powerPreference: 'high-performance'` + `stencil: false` WebGL context hints.
 
-Status:
-- ✅ Initial worker hardening utility added (`src/workers/fetchPolicy.ts`) and adopted in `src/workers/noaaWorker.ts`.
+### 3) Test Harness Expansion 🔶 Partial
 
-### 2) Performance Budget Pass
-
-Scope:
-- Vite chunks, worker payload size, frame stability under load.
-
-Actions:
-- Define budget: first-load JS <= 650KB gzip for core shell, initial render <= 2.5s on mid-tier hardware.
-- Move heavier model paths behind explicit user intent.
-- Add frame-time instrumentation around expensive charts and scene effects.
-
-Acceptance:
-- Stable 60 FPS target in nominal heliocentric mode.
-- No long tasks > 100ms during standard HUD interactions.
-
-### 3) Test Harness Expansion
-
-Scope:
-- Physics transforms, telemetry transforms, hazard scoring logic.
-
-Actions:
-- Add unit tests for CME arrival estimation, Kessler cascade probability, and index normalization.
-- Add fixture-driven tests for NOAA payload compatibility drift.
-- Add regression snapshots for Oracle hazard summary contract output.
-
-Acceptance:
-- Critical transform modules covered with deterministic tests.
-- CI gate blocks regressions in physics/telemetry math.
+- `forecastMath.test.ts`: Kp forecast math covered.
+- `noaaSchemas.test.ts`: NOAA payload schema guards tested.
+- `spaceWeatherAdapters.test.ts`: OVATION/WSA-Enlil adapter health logic tested.
+- Remaining gaps: CME arrival estimation, Kessler cascade probability, Oracle contract regression.
 
 ---
 
-## Phase 2 — Neural Oracle Foundation Model Upgrades
+## Phase 2 — Neural Oracle Foundation Model Upgrades 🔶 In Progress
 
-### Surya Integration
+### Oracle NLP Pipeline ✅
 
-Goal:
-- Add visual flare precursor signal (0-2h horizon) into hazard summary features.
+- Three-lane Oracle pipeline operational: local heuristics → Transformers.js → HuggingFace cloud proxy.
+- Unified `HazardTelemetryModel` contract insulates HUD from provider changes.
+- `nlpOracleWorker.ts` handles NLP parse; `oracleWorker.ts` handles fast local path.
 
-Implementation:
-- Introduce adapter implementing `NeuralOracleProvider` contract.
-- Derive normalized flare-risk feature for Oracle prompt context.
-- Expose model source + confidence in Oracle metadata.
+### Surya Flare-Precursor Integration 🔲 Backlog
 
-### JW-Flare Integration
+- Adapter implementing `NeuralOracleProvider` contract not yet written.
+- Normalised flare-risk feature not yet exposed in Oracle prompt context.
 
-Goal:
-- Improve high-magnitude flare event prediction quality and explainability.
+### JW-Flare Integration 🔲 Backlog
 
-Implementation:
-- Add multimodal inference adapter and confidence harmonizer.
-- Blend with existing local model and rules fallback via weighted ensemble.
-
-Acceptance:
-- Oracle responses include model provenance and confidence intervals.
-- Fallback chain remains operational when advanced models unavailable.
+- Multimodal inference adapter not yet written.
+- Confidence harmoniser not yet integrated.
 
 ---
 
-## Phase 3 — Comprehensive Space Weather Model Integration
+## Phase 3 — Comprehensive Space Weather Model Integration 🔶 Stub Phase
 
-### MAGE (JHU/APL)
-- Use as geospace-response layer for magnetosphere and ionosphere overlays.
+### WSA-Enlil ✅ Stub Live
 
-### WSA-Enlil
-- Use for 1-4 day CME and solar-wind arrival forecast rails.
+- Strategic forecast stub functional in `spaceWeatherAdapters.ts`.
+- Provider health badge visible in command bar.
+- Full payload integration (actual solar-wind arrival ETA) is Phase 3 work.
 
-### OVATION Prime
-- Use for short-horizon auroral intensity/footprint forecasting in both expert and public views.
+### OVATION Prime ✅ Stub Live
 
-Implementation Pattern:
-- Integrate through `SpaceWeatherModelProvider` contracts in `src/services/telemetryProviderContracts.ts`.
-- Keep UI bound to `HazardTelemetryModel` and model output adapters, not raw payloads.
+- Tactical nowcast stub functional with L1-first, Kp fallback.
+- HUD shows `L1 LIVE` vs `KP FALLBACK` driver mode.
+- Full auroral footprint boundary polygon integration is Phase 3 work.
 
-Acceptance:
-- Model outputs can be enabled/disabled without UI rewrites.
-- Provider health and data freshness visible in HUD.
+### MAGE — JHU/APL Geospace Response 🔲 Backlog
+
+- Contract stub in `telemetryProviderContracts.ts`.
+- No adapter or overlay mesh yet.
+
+### AurorEye Citizen Science ✅
+
+- `aurorEyeSync.ts` + `useAurorEyeTimelineSync.ts` operational.
+- Normalised AurorEye frames aligned to telemetry timeline.
 
 ---
 
-## Phase 4 — Education and Public Engagement
+## Phase 4 — Education and Public Engagement 🔲 Planned
 
-### Educational Overlays
-- Tiered explanations: Beginner, Student, Forecaster.
-- Context cards: "Why this matters" for KP, Bz, CME arrival, aurora footprint.
+### Educational Overlays 🔲
 
-### Citizen Science Data
-- Add Aurorasaurus/AurorEye adapters and confidence blending.
-- Show community observations as corroboration layer (with quality scoring).
+- Tiered explanations (Beginner/Student/Forecaster) not yet built.
+- `GlossaryPanel.tsx` exists as a foundation.
 
-### Asteroid/Kuiper Extensions
-- Expand NEO-focused overlays and alert rails.
-- Add timeline stories linking orbital mechanics to public safety relevance.
+### Citizen Science Data 🔲
 
-Acceptance:
-- Non-expert users can answer "what does this mean for me?" from UI alone.
-- Enthusiasts get location-aware aurora and NEO insight without losing scientific fidelity.
+- AurorEye adapter live (see Phase 3).
+- AuroraSaurus adapter not started.
+
+### Asteroid/Kuiper Extensions 🔶 Partial
+
+- `AsteroidBelt.tsx` and `KuiperBelt.tsx` rendered as particle systems. ✅
+- `ApophisTracker.tsx` with 2029 orbital close-approach. ✅
+- Individual asteroid hover/click and NEO alert rail: backlog.
+
+---
+
+## Phase 5 — UX Maturity 🔶 In Progress (March 2026)
+
+### Camera Control System ✅
+
+- Click planet → smooth GSAP camera focus.
+- Manual OrbitControls interaction → free-cam override.
+- `F` key → re-lock; `U` key → unlock.
+- Track/Free Cam status badge in command bar.
+
+### Keyboard Shortcut System ✅ Partial
+
+- `1–6` / `Shift+1–6` / `Esc` / `F` / `U` operational.
+- Number-key planet jump (1–9) → planned.
+- Shortcut help overlay (`?` key) → planned.
+
+### Snapshot Share ✅
+
+- URL-encoded snapshot state (`snapshotService.ts`).
+- Canvas screenshot capture.
+
+### Social Relay ✅
+
+- Alert broadcast to Make.com / n8n webhook.
+- Direct X.com relay endpoint (`/api/alerts/x-relay`).
+- Backend headless auto-relay mode.
+
+### Audio Sonification ✅
+
+- `useSolarSonification.ts`: full Web Audio API signal chain.
+- `audioAtmosphere.ts`: ambient drone layer connected to audio toggle.
+
+---
+
+## Upcoming Priorities (March 2026 → Q2 2026)
+
+1. **Number-key planet jump** — bind 1–9 to focus Solar System bodies.
+2. **Keyboard shortcut help overlay** — `?` key shows all bindings.
+3. **Auto-unlock at extreme zoom** — free-cam when orbit distance > 3 M units.
+4. **Auto-toast on mode flip** — notify user when tracking state changes.
+5. **TAA post-process** — eliminate residual sub-pixel shimmer.
+6. **Instanced asteroid mesh** — enable hover/click on individual belt objects.
+7. **Surya / JW-Flare Oracle adapters** — Phase 2 model upgrades.
+8. **MAGE geospace-response overlay** — Phase 3 magnetosphere data integration.
+9. **Tiered educational overlays** — Beginner/Student/Forecaster context cards.
+10. **Test harness expansion** — CI gate on physics/telemetry math regressions.
 
 ---
 

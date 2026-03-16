@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -78,6 +78,12 @@ export default function OortCloud({ visible = true }: OortCloudProps) {
   const { gl } = useThree();
   const pointsRef = useRef<THREE.Points>(null!);
   const matRef = useRef<THREE.ShaderMaterial>(null!);
+  const frameCountRef = useRef(0);
+
+  // Particles never change position — skip per-frame matrix recomputes.
+  useEffect(() => {
+    if (pointsRef.current) pointsRef.current.matrixAutoUpdate = false;
+  }, []);
 
   const { geometry } = useMemo(() => {
     const total = INNER_PARTICLES + OUTER_PARTICLES;
@@ -117,7 +123,7 @@ export default function OortCloud({ visible = true }: OortCloudProps) {
   }, [gl]);
 
   useFrame(({ clock }) => {
-    if (!matRef.current) return;
+    if (!matRef.current || ++frameCountRef.current % 4 !== 0) return;
     matRef.current.uniforms.uTime.value = clock.elapsedTime;
   });
 

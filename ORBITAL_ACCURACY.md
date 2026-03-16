@@ -109,161 +109,72 @@
 
 ---
 
-## 💡 Enhancement Ideas for Next Phase
+## 💡 Shipped Since Initial Doc
 
-### **A. Advanced Orbital Features** 🛰️
+The following items were previously listed as "Enhancement Ideas" and are now **fully implemented**:
 
-1. **Asteroid Belt Visualization**
+### Asteroid Belt
+- `AsteroidBelt.tsx`: particle ring between Mars and Jupiter
+- Realistic Kirkwood-distribution density
+- Additive blending, frustum-aware rendering
 
-   - Particle ring between Mars and Jupiter
-   - 10,000 asteroids in orbital paths
-   - Realistic distribution (Kirkwood gaps)
+### Kuiper Belt + Oort Cloud
+- `KuiperBelt.tsx`: faint particle disk beyond Neptune
+- `OortCloud.tsx`: artistic 4–7 k unit procedural halo shell
+- Both use `matrixAutoUpdate = false` for zero CPU overhead
+
+### Heliosphere + Local Interstellar Cloud
+- `HeliopauseShell.tsx`: user-toggled heliosphere boundary
+- `LocalInterstellarCloud.tsx`: warm shell around the system
+
+### Bow Shock Visualization
+- `EarthBowShock.tsx`: curved shock front dynamically scaled to solar wind pressure
+- Combines with `MagneticTailVisualizer` for complete magnetosphere view
+
+### Deep Space Network Live Link
+- `DSNLiveLink.tsx`: live antenna/signal link visualisation
+
+### Apophis Close-Approach Tracker
+- `ApophisTracker.tsx` + `ApophisPanel.tsx`: precise 2029 flyby orbital path
+- Separate from the deep-time geological navigator
+
+### ISS Live 3D Position
+- `LiveISS.tsx` + `LiveISSHUD.tsx`: real-time TLE-derived orbit shown in scene
+
+### Camera Cinematic Control
+- Planetary click → smooth camera focus (GSAP tween via `useCameraFocus`)
+- Manual override detection (OrbitControls `start` event → free-cam)
+- Re-lock camera: `F` key; unlock: `U` key
+- Status badge shows current mode in command bar
+- `EarthZoomLadderController`: LOD-aware clip-plane adaptation per zoom level
+
+---
+
+## 🔲 Remaining Backlog Items
+
+The following from the original ideas list are **not yet implemented**:
+
+- Comet trails with dynamic dust/gas tails
+- Lagrange point visualisation (L1–L5 + JWST/SOHO markers)
+- Uranus / Neptune ring systems (Saturn-style rings done)
+- Planet rotation axis / axial tilt indicators
+- Major moon orbit paths (Io, Europa, Titan, Triton)
+- Surface features (Great Red Spot texture, Saturn hexagon)
+- Magnetic reconnection / substorm onset visualisation
+- Comparative split-screen for historical events
+- Cinematic path fly-throughs (Grand Tour auto-camera)
 
 2. **Kuiper Belt**
    - Faint particle disk beyond Neptune
    - Pluto + dwarf planets (Eris, Makemake, Haumea)
 
-3. **Comet Trails**
+3. **Comet Trails** *(backlog)*
    - Generate comets with elliptical orbits
    - Dynamic dust/gas tails pointing away from Sun
-   - Famous comets: Halley, NEOWISE, etc.
 
-4. **Lagrange Points**
+4. **Lagrange Points** *(backlog)*
    - Visualize L1-L5 points for Earth-Sun system
    - Show satellite positions (JWST at L2, SOHO at L1)
-
-### **B. Enhanced Planet Details** 🪐
-
-1. **Planetary Rings**
-
-   - Add rings to Uranus + Neptune (not just Saturn)
-   - Ice particle shimmer effects
-   - Ring shadows on planet surface
-
-2. **Planet Rotation Axis**
-   - Visualize axial tilt
-   - Show north/south poles
-   - Season indicators
-
-3. **Major Moon Orbits**
-   - Visible paths for Io, Europa, Ganymede, Callisto
-   - Titan's orbit around Saturn
-   - Triton's retrograde orbit (Neptune)
-
-4. **Surface Features**
-   - Jupiter's Great Red Spot (rotating texture)
-   - Saturn's hexagon storm (north pole)
-   - Mars' Olympus Mons (topographic bump)
-
-### **C. Space Weather Enhancements** ⚡
-
-1. **Solar Wind Streams**
-
-   - Particle flow from Sun to planets
-   - High-speed streams vs slow solar wind
-   - Color-coded by speed (blue → red)
-
-2. **Bow Shock Visualization**
-   - Curved shock front where solar wind hits magnetosphere
-   - Dynamic rippling during CME impact
-   - Particle acceleration at shock
-
-3. **Reconnection Events**
-   - Magnetic field line reconnection in magnetotail
-   - Substorm onset visualization
-   - Energy release bursts
-
-4. **Radiation Belts**
-   - Van Allen belts for Earth
-   - Jovian radiation belts (most intense)
-   - Trapped particle visualization
-
-### **D. Historical Event Enhancements** 📜
-
-1. **Event Playback Timeline**
-   - Scrubber bar showing buildup → impact → recovery
-   - Key moments marked (flare onset, CME launch, impact)
-
-2. **Comparative View**
-   - Split screen: Historical event vs current conditions
-   - Side-by-side Sun states
-
-3. **Event Annotations**
-   - Pop-up info cards at key moments
-   - "Flare observed by Carrington" marker
-   - Telegraph failure timeline
-
-### **E. Camera & Navigation** 📹
-
-1. **Cinematic Camera Paths**
-   - Fly from Sun → Mercury → Venus → Earth
-   - "Grand Tour" automatic path
-   - Save/load custom camera positions
-
-2. **Multi-View Mode**
-   - Picture-in-picture: Earth close-up + full system view
-   - Split screen: Sun vs magnetosphere
-
-3. **VR/AR Support**
-   - WebXR integration for immersive viewing
-   - Hand tracking for planet interaction
-
-### **F. Data Integration** 📊
-
-1. **Real NASA DONKI API**
-   - Live CME detection + arrival predictions
-   - Solar flare classification (C/M/X class)
-   - Geomagnetic storm watches/warnings
-
-2. **Historical Database**
-   - Load actual KP index values for past events
-   - Real solar wind speed measurements
-   - Satellite damage records
-
-3. **Export Features**
-   - Screenshot/video capture
-   - Data export (CSV orbital positions)
-   - Share view URLs (date + camera position)
-
-### **G. Educational Features** 🎓
-
-1. **Guided Tours**
-   - "What causes aurora?" interactive lesson
-   - "CME propagation explained" step-by-step
-   - Planet facts pop-ups
-
-2. **Scale Comparisons**
-   - Toggle between "realistic distances" vs "compressed view"
-   - Planet size comparison tool
-   - Distance indicators
-
-3. **Mission Planning**
-   - Calculate launch windows (Hohmann transfers)
-   - Show spacecraft trajectories (Voyager, New Horizons)
-   - Delta-V requirements
-
----
-
-## 🎨 UI/UX Polish Ideas
-
-### **Performance Optimizations**
-
-- Instanced rendering for asteroid belt (50,000+ objects)
-- LOD system (distant planets = fewer polygons)
-- Occlusion culling (don't render hidden objects)
-
-### **Accessibility**
-
-- Keyboard shortcuts overlay (press ? to show)
-- Screen reader support for data panels
-- High contrast mode toggle
-
-### **Themes**
-
-- Dark mode (current: cyan/black)
-- Light mode (white/blue)
-- "Mars red" theme
-- "Deep space purple" theme
 
 ---
 
@@ -272,39 +183,36 @@
 **Orbital Scaling**: 60 units/AU  
 **Visible Range**: Sun (0,0,0) to Neptune (~1,800 units)  
 **Camera**: Position [0, 150, 300], FOV 65°  
-**Particle Count**: ~25,000 total  
-**Frame Rate**: 60fps (RTX 2060+ / M1+)
+**Particle Count**: ~25,000 total (stars 15k + nebula 3k + magnetotail 960 + flares 400–800)  
+**Frame Rate target**: 60fps (RTX 2060+ / M1+)  
+**Adaptive DPR range**: 0.9–1.5 (0.6–1.0 in Eco mode)  
+**Shadow type**: PCFSoftShadowMap (on-demand update in Lite/Eco modes)
 
-**UI Panels**:
+**UI Panel Sizing**:
 
-- inset-inline-start: 340px (telemetry, mission core, threats)
-- inset-inline-end: 280px (diagnostics, health)
-- inset-block-start: 520px collapsible (sovereign control)
-- inset-block-end: 640px collapsible (timeline)
-
----
-
-## 🚀 Next Steps Recommendation
-
-**Priority 1** (Most Impact):
-
-1. Asteroid belt visualization
-2. Enhanced comet system
-3. Bow shock rendering
-4. Real DONKI API integration
-
-**Priority 2** (Visual Polish):
-5. Planetary rings (Uranus/Neptune)
-6. Planet rotation axes
-7. Solar wind streams
-8. Cinematic camera paths
-
-**Priority 3** (Educational):
-9. Guided tours
-10. Mission planning tools
-11. Export features
-12. VR support
+- `insetInlineStart: 340px` (left dock panels)
+- `insetInlineEnd: 280px` (right dock panels)
+- All inline positioning uses CSS logical properties for RTL safety
 
 ---
 
-The solar system is now scientifically accurate and ready for advanced features! 🌟
+## 🚀 Recommended Next Steps
+
+**Priority 1** (High impact, low effort):
+1. Comet trails with dynamic tails (elliptical orbit path + particle spray)
+2. Lagrange point markers (JWST at L2, SOHO at L1)
+3. Planet axial tilt indicators + pole markers
+
+**Priority 2** (Visual polish):
+4. Uranus / Neptune ring systems
+5. Great Red Spot rotating texture on Jupiter
+6. Solar wind stream particles (speed-color-coded flow from Sun)
+
+**Priority 3** (Engineering):
+7. Instanced mesh for individual asteroids (replaces current particle ring - enables hover/click)
+8. OffscreenCanvas background layer for stars (reduce main thread load)
+9. TAA (temporal anti-aliasing) post-process pass to eliminate sub-pixel shimmer
+
+---
+
+The solar system is scientifically accurate and production-ready. 🌟

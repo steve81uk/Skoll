@@ -1,5 +1,6 @@
 import { motion, useMotionValue, useMotionValueEvent, useSpring } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { probabilityLabel, kesslerAriaLabel } from '../lib/a11y';
 
 interface KesslerTelemetryChipProps {
   next24hProbability: number | null;
@@ -34,22 +35,31 @@ export default function KesslerTelemetryChip({ next24hProbability, angularScale 
 
   const probPct = Math.max(0, Math.min(100, probDisplay * 100));
   const threatTone = probPct >= 60 ? 'text-red-300 border-red-400/45 bg-red-500/10' : probPct >= 30 ? 'text-amber-200 border-amber-400/40 bg-amber-500/8' : 'text-cyan-100 border-cyan-400/35 bg-black/50';
+  const { level: riskLevel } = probabilityLabel(probPct, 'orbital debris cascade');
+  const ariaRole = probPct >= 60 ? 'alert' : 'status';
+  const livePolite = probPct >= 60 ? 'assertive' : 'polite';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
+      role={ariaRole}
+      aria-live={livePolite}
+      aria-atomic="true"
+      aria-label={kesslerAriaLabel(probDisplay)}
       className={`pointer-events-auto rounded-md border px-2.5 py-1.5 backdrop-blur-md shadow-[0_0_22px_rgba(8,145,178,0.18)] ${threatTone}`}
     >
       <div className="text-[7px] uppercase tracking-[0.16em] text-cyan-400/80">Kessler Threat Net</div>
       <div className="mt-0.5 flex items-baseline gap-2">
         <span className="text-[9px] uppercase tracking-[0.1em] text-cyan-300/85">24h</span>
         <span className="text-[11px] font-semibold tabular-nums">{probPct.toFixed(1)}%</span>
-        <span className="text-cyan-500/40">|</span>
-        <span className="text-[9px] uppercase tracking-[0.1em] text-cyan-300/85">ω</span>
-        <span className="text-[11px] font-semibold tabular-nums">x{scaleDisplay.toFixed(2)}</span>
+        <span className="text-cyan-500/40" aria-hidden="true">|</span>
+        <span className="text-[9px] uppercase tracking-[0.1em] text-cyan-300/85" aria-hidden="true">ω</span>
+        <span className="text-[11px] font-semibold tabular-nums" title={`Angular cascade scale factor: x${scaleDisplay.toFixed(2)}`}>x{scaleDisplay.toFixed(2)}</span>
       </div>
+      {/* Plain-text risk label — accessible to all users, not colour-only */}
+      <div className="mt-0.5 text-[7px] opacity-70 tracking-wide">{riskLevel}</div>
     </motion.div>
   );
 }

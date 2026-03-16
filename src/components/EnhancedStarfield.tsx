@@ -5,6 +5,10 @@ import * as THREE from 'three';
 export const EnhancedStarfield = () => {
   const starsRef = useRef<THREE.Points>(null!);
   const nebulaRef = useRef<THREE.Points>(null!);
+  // Frame counter for throttled shader updates.
+  // Stars update every 3 frames (twinkling ~20fps is imperceptible at 60fps).
+  // Nebula updates every 6 frames (drift is extremely slow, ~10fps sufficient).
+  const frameCountRef = useRef(0);
 
   // Dense star field
   const starGeometry = useMemo(() => {
@@ -195,15 +199,16 @@ export const EnhancedStarfield = () => {
   }, []);
 
   useFrame((state) => {
-    if (starsRef.current) {
+    frameCountRef.current++;
+
+    if (starsRef.current && frameCountRef.current % 3 === 0) {
       const mat = starsRef.current.material as THREE.ShaderMaterial;
       mat.uniforms.uTime.value = state.clock.elapsedTime;
-      
-      // Very slow rotation for parallax
-      starsRef.current.rotation.y += 0.00005;
+      // Very slow rotation for parallax effect — no per-frame matrix recompute needed.
+      starsRef.current.rotation.y += 0.00015; // 3× less frequent = same apparent speed
     }
 
-    if (nebulaRef.current) {
+    if (nebulaRef.current && frameCountRef.current % 6 === 0) {
       const mat = nebulaRef.current.material as THREE.ShaderMaterial;
       mat.uniforms.uTime.value = state.clock.elapsedTime;
     }
