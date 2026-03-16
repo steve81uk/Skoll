@@ -44,11 +44,14 @@ import { readFileSync, existsSync, appendFileSync, mkdirSync }   from 'fs';
 import { fileURLToPath }              from 'url';
 import { dirname, join }              from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
+import express                          from 'express';
+import cors                             from 'cors';
 import * as tf                        from '@tensorflow/tfjs';
 
 // ─── dotenv (optional — swallowed if not installed) ───────────────────────────
 try {
   const { default: dotenv } = await import('dotenv');
+  dotenv.config({ path: join(process.cwd(), '.env.backend') });
   dotenv.config();
 } catch { /* env vars must be set externally if dotenv is absent */ }
 
@@ -58,6 +61,7 @@ const __dirname  = dirname(__filename);
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 const PORT           = parseInt(process.env.PORT            ?? '8080', 10);
+const HF_PROXY_PORT  = parseInt(process.env.HF_PROXY_PORT   ?? '3000', 10);
 const MODEL_PATH     = process.env.MODEL_PATH
   ?? join(__dirname, 'public', 'models', 'skoll-lstm-v1', 'model.json');
 const FETCH_INTERVAL = parseInt(process.env.FETCH_INTERVAL_MS ?? '60000', 10);
@@ -88,6 +92,14 @@ const EPHEMERIS_ARCHIVE_DIR = join(__dirname, 'data', 'ephemeris');
 const EPHEMERIS_ARCHIVE_FILE = join(EPHEMERIS_ARCHIVE_DIR, 'archive.jsonl');
 const DATA_HUB_ARCHIVE_DIR = join(__dirname, 'data', 'data-hub');
 const DATA_HUB_ARCHIVE_FILE = join(DATA_HUB_ARCHIVE_DIR, `archive.v${DATA_HUB_SCHEMA_VERSION}.jsonl`);
+const HF_INFERENCE_MODEL = process.env.HF_INFERENCE_MODEL ?? 'HuggingFaceH4/zephyr-7b-beta';
+const HF_INFERENCE_API_URL = process.env.HF_INFERENCE_API_URL
+  ?? `https://api-inference.huggingface.co/models/${HF_INFERENCE_MODEL}`;
+const HF_API_TOKEN = process.env.HF_API_TOKEN ?? '';
+const HF_ALLOWED_ORIGINS = (process.env.HF_ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:4173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0);
 
 const HORIZONS_BODY_IDS = {
   Mercury: '199',
@@ -127,6 +139,21 @@ const log = {
   debug : (...a) => LOG_LEVEL === 'debug'  && console.log ('[DEBUG]', new Date().toISOString(), ...a),
   warn  : (...a) => LOG_LEVEL !== 'silent' && console.warn('[WARN] ', new Date().toISOString(), ...a),
   error : (...a) =>                           console.error('[ERROR]', new Date().toISOString(), ...a),
+};
+
+const anomalyOriginSet = new Set(HF_ALLOWED_ORIGINS);
+
+const anomalyCorsOptions = {
+  origin(origin, callback) {
+    if (!origin || !anomalyOriginSet.has(origin)) {
+      callback(new Error('CORS origin denied'));
+      return;
+    }
+    callback(null, true);
+  },
+  methods: ['POST'],
+  allowedHeaders: ['Content-Type'],
+  maxAge: 600,
 };
 
 const dataHubCache = {
@@ -171,6 +198,115 @@ function appendDataHubArchive(record) {
   appendFileSync(DATA_HUB_ARCHIVE_FILE, `${JSON.stringify(envelope)}\n`, 'utf-8');
   return envelope;
 }
+
+function validateAnomalyRequest(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { ok: false, error: 'Request body must be a JSON object.' };
+  }
+
+  const { inputs, parameters } = payload;
+
+  if (typeof inputs !== 'string' || inputs.trim().length === 0) {
+    return { ok: false, error: 'Field "inputs" must be a non-empty string.' };
+  }
+
+  if (inputs.length > 8000) {
+    return { ok: false, error: 'Field "inputs" exceeds the 8000 character limit.' };
+  }
+
+  if (parameters !== undefined && (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters))) {
+    return { ok: false, error: 'Field "parameters" must be an object when provided.' };
+  }
+
+  const safeParameters = {};
+
+  if (parameters && Object.prototype.hasOwnProperty.call(parameters, 'max_new_tokens')) {
+    const maxNewTokens = parameters.max_new_tokens;
+    if (!Number.isInteger(maxNewTokens) || maxNewTokens < 1 || maxNewTokens > 512) {
+      return { ok: false, error: 'Field "parameters.max_new_tokens" must be an integer between 1 and 512.' };
+    }
+    safeParameters.max_new_tokens = maxNewTokens;
+  }
+
+  if (parameters && Object.prototype.hasOwnProperty.call(parameters, 'temperature')) {
+    const temperature = parameters.temperature;
+    if (typeof temperature !== 'number' || Number.isNaN(temperature) || temperature < 0 || temperature > 2) {
+      return { ok: false, error: 'Field "parameters.temperature" must be a number between 0 and 2.' };
+    }
+    safeParameters.temperature = temperature;
+  }
+
+  if (parameters && Object.prototype.hasOwnProperty.call(parameters, 'return_full_text')) {
+    const returnFullText = parameters.return_full_text;
+    if (typeof returnFullText !== 'boolean') {
+      return { ok: false, error: 'Field "parameters.return_full_text" must be a boolean.' };
+    }
+    safeParameters.return_full_text = returnFullText;
+  }
+
+  return {
+    ok: true,
+    value: {
+      inputs: inputs.trim(),
+      parameters: safeParameters,
+    },
+  };
+}
+
+const anomalyProxyApp = express();
+anomalyProxyApp.disable('x-powered-by');
+anomalyProxyApp.use(express.json({ limit: '32kb' }));
+
+anomalyProxyApp.options('/api/anomaly', cors(anomalyCorsOptions));
+anomalyProxyApp.post('/api/anomaly', cors(anomalyCorsOptions), async (req, res) => {
+  try {
+    if (!HF_API_TOKEN) {
+      res.status(500).json({ ok: false, error: 'HF_API_TOKEN is not configured on backend' });
+      return;
+    }
+
+    const validation = validateAnomalyRequest(req.body);
+    if (!validation.ok) {
+      res.status(400).json({ ok: false, error: validation.error });
+      return;
+    }
+
+    const response = await fetch(HF_INFERENCE_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${HF_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(validation.value),
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    const raw = await response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = { raw };
+    }
+
+    if (!response.ok) {
+      res.status(response.status).json({ ok: false, error: 'Hugging Face upstream request failed', detail: parsed });
+      return;
+    }
+
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(502).json({ ok: false, error: String(err) });
+  }
+});
+
+anomalyProxyApp.use((err, _req, res, _next) => {
+  if (err && String(err.message).toLowerCase().includes('cors')) {
+    res.status(403).json({ ok: false, error: 'Origin is not allowed by CORS policy' });
+    return;
+  }
+  res.status(500).json({ ok: false, error: 'Proxy server error' });
+});
 
 function readDataHubArchive(limit = 200) {
   if (!existsSync(DATA_HUB_ARCHIVE_FILE)) {
@@ -1112,9 +1248,14 @@ setInterval(() => {
   harvestDailyEphemerisSnapshot().catch((err) => log.warn('Scheduled ephemeris harvest failed:', String(err)));
 }, 24 * 60 * 60 * 1000);
 
+const anomalyProxyServer = await new Promise((resolve) => {
+  const server = anomalyProxyApp.listen(HF_PROXY_PORT, () => resolve(server));
+});
 await new Promise((resolve) => httpServer.listen(PORT, resolve));
 log.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 log.info(`SKÖLL-TRACK ML Backend  ●  port ${PORT}`);
+log.info(`HF anomaly proxy        →  http://localhost:${HF_PROXY_PORT}/api/anomaly`);
+log.info(`HF CORS allowlist       →  ${HF_ALLOWED_ORIGINS.join(', ') || '(none)'}`);
 log.info(`WebSocket  →  ws://localhost:${PORT}`);
 log.info(`Health     →  http://localhost:${PORT}/health`);
 log.info(`Model      →  ${model ? '✓ LSTM v1' : '⚠ heuristic fallback'}`);
@@ -1128,6 +1269,7 @@ async function shutdown(signal) {
   for (const ws of subscribers.keys()) { stopSubscription(ws); ws.close(); }
   await new Promise((resolve) => wss.close(resolve));
   await new Promise((resolve) => httpServer.close(resolve));
+  await new Promise((resolve) => anomalyProxyServer.close(resolve));
   log.info('Clean exit.');
   process.exit(0);
 }

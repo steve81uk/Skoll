@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface EarthWeatherLayersProps {
@@ -47,8 +47,11 @@ export default function EarthWeatherLayers({
   currentDate,
   isLiveMode = true,
 }: EarthWeatherLayersProps) {
+  const { camera } = useThree();
   const groupRef = useRef<THREE.Group>(null!);
   const loaderRef = useRef(new THREE.TextureLoader());
+  const materialRefs = useRef<Record<LayerKey, THREE.MeshBasicMaterial | null>>({ precip: null, snow: null, wind: null });
+  const lodFadeRef = useRef(1);
   const [layers, setLayers] = useState<LayerState>({ precip: null, snow: null, wind: null });
 
   useEffect(() => {
@@ -88,13 +91,29 @@ export default function EarthWeatherLayers({
     };
   }, [owmApiKey]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!groupRef.current || !visible) return;
     groupRef.current.position.copy(earthPos);
 
     const motionTimeMs = isLiveMode ? Date.now() : (currentDate?.getTime() ?? Date.now());
     const turns = (motionTimeMs / 1000) / EARTH_SIDEREAL_SECONDS;
     groupRef.current.rotation.y = (turns % 1) * Math.PI * 2;
+
+    const distance = camera.position.distanceTo(earthPos);
+    const targetFade = 1 - THREE.MathUtils.smoothstep(distance, 120, 420);
+    const smooth = 1 - Math.exp(-delta * 6.8);
+    lodFadeRef.current = THREE.MathUtils.lerp(lodFadeRef.current, targetFade, smooth);
+
+    const fade = lodFadeRef.current;
+    const precipAlpha = (opacityPrecip ?? LAYER_META.precip.opacity) * fade;
+    const snowAlpha = (opacitySnow ?? LAYER_META.snow.opacity) * fade;
+    const windAlpha = (opacityWind ?? LAYER_META.wind.opacity) * fade;
+
+    if (materialRefs.current.precip) materialRefs.current.precip.opacity = precipAlpha;
+    if (materialRefs.current.snow) materialRefs.current.snow.opacity = snowAlpha;
+    if (materialRefs.current.wind) materialRefs.current.wind.opacity = windAlpha;
+
+    groupRef.current.visible = fade > 0.015;
   });
 
   if (!visible || !owmApiKey) return null;
@@ -117,15 +136,20 @@ export default function EarthWeatherLayers({
           <mesh key={key} renderOrder={key === 'precip' ? 9 : key === 'snow' ? 10 : 11}>
             <sphereGeometry args={[layer.radius, 64, 32]} />
             <meshBasicMaterial
+              ref={(material) => {
+                materialRefs.current[key] = material;
+              }}
               map={tex}
               color={layer.color}
               transparent
               opacity={alpha}
               blending={THREE.AdditiveBlending}
+              depthTest
               depthWrite={false}
+              alphaTest={0.015}
               polygonOffset
-              polygonOffsetFactor={-1}
-              polygonOffsetUnits={-1}
+              polygonOffsetFactor={-3}
+              polygonOffsetUnits={-3}
             />
           </mesh>
         );

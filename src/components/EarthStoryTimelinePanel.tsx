@@ -7,6 +7,7 @@ interface EarthStoryTimelinePanelProps {
   cmeImpactActive: boolean;
   blackoutVisible: boolean;
   dateLabel: string;
+  className?: string;
 }
 
 export default function EarthStoryTimelinePanel({
@@ -18,6 +19,7 @@ export default function EarthStoryTimelinePanel({
   cmeImpactActive,
   blackoutVisible,
   dateLabel,
+  className,
 }: EarthStoryTimelinePanelProps) {
   if (!visible) return null;
 
@@ -55,7 +57,7 @@ export default function EarthStoryTimelinePanel({
   };
 
   return (
-    <div className="pointer-events-none absolute bottom-24 left-[290px] z-[75] w-[min(440px,42vw)] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm">
+    <div className={className ?? 'pointer-events-none absolute bottom-24 left-[290px] z-[75] w-[min(440px,42vw)] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm'}>
       <div className="text-[8px] uppercase tracking-[0.16em] text-cyan-400/80">Earth Story Timeline</div>
       <div className="mt-1 text-[9px] uppercase tracking-[0.1em] text-cyan-200/90">{dateLabel} • LOD {lodStage}</div>
       <div className="mt-2 grid gap-1.5">

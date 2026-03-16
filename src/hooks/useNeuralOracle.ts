@@ -5,15 +5,23 @@ interface OracleReply {
   role: 'user' | 'oracle';
   text: string;
   at: number;
+  lane?: 'instant' | 'anomaly';
 }
 
 interface WorkerReady {
   type: 'READY';
-  provider: 'transformers-webgpu' | 'rules-fallback';
+  provider: 'local-webgpu' | 'local-cpu' | 'rules-fallback';
 }
 
 interface WorkerReply {
   type: 'REPLY';
+  requestId: string;
+  text: string;
+}
+
+interface WorkerAnomalyResult {
+  type: 'ANOMALY_RESULT';
+  requestId: string;
   text: string;
 }
 
@@ -45,9 +53,12 @@ interface OracleExplanation {
 
 export function useNeuralOracle() {
   const workerRef = useRef<Worker | null>(null);
-  const [provider, setProvider] = useState<'transformers-webgpu' | 'rules-fallback'>('rules-fallback');
+  const requestSeqRef = useRef(0);
+  const activeRequestRef = useRef<string | null>(null);
+  const [provider, setProvider] = useState<'local-webgpu' | 'local-cpu' | 'rules-fallback'>('rules-fallback');
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
   const [explaining, setExplaining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<OracleReply[]>([]);
@@ -57,7 +68,7 @@ export function useNeuralOracle() {
     const worker = new Worker(new URL('../workers/oracleWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
 
-    worker.onmessage = (ev: MessageEvent<WorkerReady | WorkerReply | WorkerError | WorkerExplainResult>) => {
+    worker.onmessage = (ev: MessageEvent<WorkerReady | WorkerReply | WorkerAnomalyResult | WorkerError | WorkerExplainResult>) => {
       const msg = ev.data;
       if (msg.type === 'READY') {
         setProvider(msg.provider);
@@ -66,8 +77,20 @@ export function useNeuralOracle() {
       }
 
       if (msg.type === 'REPLY') {
+        if (activeRequestRef.current !== msg.requestId) {
+          return;
+        }
         setLoading(false);
-        setMessages((prev) => [...prev, { role: 'oracle', text: msg.text, at: Date.now() }]);
+        setMessages((prev) => [...prev, { role: 'oracle', text: msg.text, at: Date.now(), lane: 'instant' }]);
+        return;
+      }
+
+      if (msg.type === 'ANOMALY_RESULT') {
+        if (activeRequestRef.current !== msg.requestId) {
+          return;
+        }
+        setAnomalyLoading(false);
+        setMessages((prev) => [...prev, { role: 'oracle', text: msg.text, at: Date.now(), lane: 'anomaly' }]);
         return;
       }
 
@@ -83,12 +106,14 @@ export function useNeuralOracle() {
       }
 
       setLoading(false);
+      setAnomalyLoading(false);
       setExplaining(false);
       setError(msg.error);
     };
 
     worker.onerror = (ev) => {
       setLoading(false);
+      setAnomalyLoading(false);
       setExplaining(false);
       setError(ev.message);
     };
@@ -104,10 +129,13 @@ export function useNeuralOracle() {
   const ask = useCallback((prompt: string, snapshot: HazardTelemetryModel) => {
     if (!workerRef.current || !prompt.trim()) return;
 
+    const requestId = `${Date.now()}-${requestSeqRef.current++}`;
+    activeRequestRef.current = requestId;
     setError(null);
     setLoading(true);
+    setAnomalyLoading(true);
     setMessages((prev) => [...prev, { role: 'user', text: prompt.trim(), at: Date.now() }]);
-    workerRef.current.postMessage({ type: 'ASK', prompt: prompt.trim(), snapshot });
+    workerRef.current.postMessage({ type: 'ASK', prompt: prompt.trim(), snapshot, requestId });
   }, []);
 
   const explain = useCallback((mode: 'global' | 'local', snapshot: HazardTelemetryModel, prompt?: string) => {
@@ -122,6 +150,7 @@ export function useNeuralOracle() {
     provider,
     ready,
     loading,
+    anomalyLoading,
     explaining,
     error,
     messages,

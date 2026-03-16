@@ -1,13 +1,15 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, PerformanceMonitor, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Orbit } from 'lucide-react';
+import { Orbit, Volume2, VolumeX, Bell, Share2, Zap, Gamepad2, Radio, Leaf } from 'lucide-react';
 import * as THREE from 'three';
 import { useCameraFocus } from './hooks/useCameraFocus';
-import { NeuralBoot } from './components/NeuralBoot';
+import { CosmicTooltip } from './components/CosmicTooltip';
+import type { TooltipContent } from './context/TooltipContext';
+import { RetroBoot } from './components/RetroBoot';
 import { TelemetryRibbon } from './components/TelemetryRibbon';
 import { PlanetDiagnosticsSlate } from './components/PlanetDiagnosticsSlate';
 import { LandingSlate } from './components/LandingSlate';
@@ -60,6 +62,7 @@ import TerminalLogHUD from './components/TerminalLogHUD';
 import EarthCoreDynamo, { EarthDynamoPanel } from './components/EarthCoreDynamo';
 import ISSCameraPanel from './components/ISSCameraStream';
 import ForecastingSlicerPanel from './components/ForecastingSlicerPanel';
+import KesslerTelemetryChip from './components/KesslerTelemetryChip';
 import LocalInterstellarCloud from './components/LocalInterstellarCloud';
 import AuroraOvationHUD from './components/AuroraOvationHUD';
 import HeliopauseShell from './components/HeliopauseShell';
@@ -74,7 +77,8 @@ import { useNOAADONKI } from './hooks/useNOAADONKI';
 import { useSpaceWeatherProviders } from './hooks/useSpaceWeatherProviders';
 import { useAurorEyeTimelineSync } from './hooks/useAurorEyeTimelineSync';
 import { createHazardTelemetryModel } from './services/hazardModel';
-import { AudioAtmosphere } from './services/audioAtmosphere';
+import { useSolarSonification } from './hooks/useSolarSonification';
+import { useKesslerWorker } from './hooks/useKesslerWorker';
 import { DEFAULT_RULES, evaluateAlerts, type TriggeredAlert } from './services/alertEngine';
 import { buildSnapshotUrl, captureCanvasScreenshot, decodeSnapshot, type SnapshotState } from './services/snapshotService';
 import { postAlertsToRelay } from './services/socialRelay';
@@ -88,12 +92,29 @@ type FXQuality = 'LOW' | 'HIGH';
 type DockTone = 'telemetry' | 'forecast' | 'sim';
 type DockStatus = 'green' | 'amber' | 'red';
 type DockSide = 'left' | 'right';
-type DockPanelAnchor = { top: number; left?: number; right?: number };
-type CommandMenuAnchor = { top: number; left: number };
+type DockPanelAnchor = { insetBlockStart: number; insetInlineStart?: number; insetInlineEnd?: number };
+type CommandMenuAnchor = { insetBlockStart: number; insetInlineStart: number };
 type TimelineContextMenu = { x: number; y: number } | null;
 type EarthLodStage = 'SPACE' | 'ORBIT' | 'REGIONAL' | 'LOCAL';
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
-const TIME_EXPLORER_BASE_HEIGHT = 132;
+
+// ─── Dock tile CosmicTooltip content ─────────────────────────────────────────
+const DOCK_TILE_TOOLTIPS: Record<string, TooltipContent> = {
+  'telemetry':       { title: 'Telemetry Ribbon',    emoji: '◉', accentColor: '#06b6d4', tagline: 'Live Data Stream',       description: 'Real-time NOAA/DONKI geomagnetic indices, solar wind, and Kp index.' },
+  'mission-core':    { title: 'Mission Core',         emoji: '⌁', accentColor: '#06b6d4', tagline: 'Operations Centre',      description: 'Central ops overview: threat level, KPIs, and active alert stack.' },
+  'sat-threat':      { title: 'Orbital Threat',       emoji: '⚠', accentColor: '#f59e0b', tagline: 'Satellite Risk',         description: 'Satellite collision and atmospheric drag risk driven by live space weather.' },
+  'hangar':          { title: 'Satellite Hangar',     emoji: '⬢', accentColor: '#f59e0b', tagline: 'Active Fleet',           description: 'Active satellite roster with orbital mechanics and debris proximity.' },
+  'oracle':          { title: 'Neural Oracle',        emoji: '✦', accentColor: '#f59e0b', tagline: 'AI Hazard Interpreter',  description: 'Query live space-weather state in plain English. Powered by flan-t5.' },
+  'fireball':        { title: 'Fireball Tracker',     emoji: '☄', accentColor: '#f59e0b', tagline: 'Near-Earth Events',      description: 'NASA CNEOS fireball, bolide, and near-Earth object impact log.' },
+  'forecast-radar':  { title: 'Forecast Radar',       emoji: '◎', accentColor: '#8b5cf6', tagline: 'WSA-Enlil Propagation', description: 'Solar wind and CME propagation forecast from WSA-Enlil model.' },
+  'diagnostics':     { title: 'Planet Diagnostics',   emoji: '⟡', accentColor: '#8b5cf6', tagline: 'Deep Science Stats',    description: 'Planetary science: magnetosphere, atmosphere, and core dynamics.' },
+  'noaa-feed':       { title: 'NOAA Feed',            emoji: '⌬', accentColor: '#06b6d4', tagline: 'Raw Event Stream',      description: 'Raw NOAA DONKI feed: CMEs, solar flares, and radiation belt events.' },
+  'lstm-forecast':   { title: 'LSTM Forecast',        emoji: '∿', accentColor: '#8b5cf6', tagline: 'Neural Kp Prediction',  description: 'Off-thread TensorFlow.js LSTM model predicting geomagnetic Kp index.' },
+  'magnetic-grid':   { title: 'Magnetic Grid',        emoji: '⋈', accentColor: '#06b6d4', tagline: 'WMM-2025 Field Lines',  description: 'Global magnetic field line visualisation from World Magnetic Model 2025.' },
+  'data-alchemist':  { title: 'Data Alchemist',       emoji: '⚗', accentColor: '#8b5cf6', tagline: 'Fusion Dashboard',      description: 'Multi-source data fusion with derived Wolf Formula hazard metrics.' },
+  'graph-hub':       { title: 'Graph Mission Hub',    emoji: '▦', accentColor: '#8b5cf6', tagline: 'All Charts',            description: 'All real-time data charts scrollable in a single command view.' },
+};
+const TIME_EXPLORER_BASE_HEIGHT = 16;
 const BACKEND_HTTP_BASE = (import.meta.env.VITE_BACKEND_HTTP_BASE ?? import.meta.env.VITE_EPHEMERIS_API_BASE ?? 'http://localhost:8080').replace(/\/$/, '');
 const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL ?? BACKEND_HTTP_BASE.replace(/^http/i, 'ws');
 
@@ -383,7 +404,6 @@ export default function App() {
   const [dockModalSide, setDockModalSide] = useState<DockSide>('left');
   const [dockPanelAnchor, setDockPanelAnchor] = useState<DockPanelAnchor | null>(null);
   const [commandMenuAnchor, setCommandMenuAnchor] = useState<CommandMenuAnchor | null>(null);
-  const [hoveredDock, setHoveredDock] = useState<{ label: string; status: DockStatus; x: number; y: number; side: DockSide } | null>(null);
   const [nowUtc, setNowUtc] = useState(() => new Date());
   const [controlBarHeight, setControlBarHeight] = useState(92);
   const [timeExplorerHeight, setTimeExplorerHeight] = useState(TIME_EXPLORER_BASE_HEIGHT);
@@ -413,20 +433,23 @@ export default function App() {
   const [toasts, setToasts] = useState<TriggeredAlert[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [liteMode, setLiteMode] = useState(false);
+  const [ecoMode, setEcoMode] = useState(false);
+  const [adaptiveDpr, setAdaptiveDpr] = useState(1.2);
+  const [retroMode, setRetroMode] = useState(false);
   const [relayEnabled, setRelayEnabled] = useState(false);
   const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
   const [hudMinimized] = useState(false);
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
   const [planetRefs, setPlanetRefs] = useState<Map<string, THREE.Group>>(new Map());
   const burstTimeoutRef = useRef<number | null>(null);
+  const adaptiveDprLastAdjustAtRef = useRef(0);
   const envWarnedRef = useRef(false);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
-  const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const dockPanelRef = useRef<HTMLDivElement | null>(null);
   const commandMenuRef = useRef<HTMLDivElement | null>(null);
+  const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const holdScrubRef = useRef<number | null>(null);
   const precisionFetchTicketRef = useRef(0);
-  const audioRef = useRef<AudioAtmosphere | null>(null);
 
   const handleShareSnapshot = useCallback(async () => {
     const snapshotEpoch = currentDate === 'LIVE' ? Date.now() : currentDate.getTime();
@@ -479,9 +502,14 @@ export default function App() {
   useEffect(() => {
     try {
       const lite = localStorage.getItem('skoll-lite-mode');
+      const eco = localStorage.getItem('skoll-eco-mode');
       const relay = localStorage.getItem('skoll-relay-enabled');
       if (lite === '1') {
         setLiteMode(true);
+        setFxQuality('LOW');
+      }
+      if (eco === '1') {
+        setEcoMode(true);
         setFxQuality('LOW');
       }
       if (relay === '1') {
@@ -499,6 +527,14 @@ export default function App() {
       // ignore persistence errors
     }
   }, [liteMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('skoll-eco-mode', ecoMode ? '1' : '0');
+    } catch {
+      // ignore persistence errors
+    }
+  }, [ecoMode]);
 
   useEffect(() => {
     try {
@@ -534,6 +570,17 @@ export default function App() {
   // ─── LSTM off-thread inference (web worker) ─────────────────────────────────
   const lstmWorker = useLSTMWorker();
   const goesFlux = useGOESFlux();
+  const kesslerWorker = useKesslerWorker({
+    bundle: noaaDonki.bundle ?? null,
+    atmosphericDragIndex: Math.max(0, Math.min(1, (telemetry.windSpeed ?? 450) / 1000)),
+  });
+  const solarSonification = useSolarSonification({
+    kpIndex: telemetry.kpIndex ?? 0,
+    solarWindSpeed: telemetry.windSpeed ?? 400,
+    bzGsm: noaaDonki.bundle?.bzGsm ?? 0,
+    flareClass: goesFlux.flareClass,
+    kesslerRisk: kesslerWorker.forecast?.next24hProbability ?? lstmWorker.forecast?.kesslerCascade?.next24hProbability ?? 0,
+  });
   const spaceWeatherProviders = useSpaceWeatherProviders(noaaDonki);
 
   // Debug logging
@@ -728,24 +775,24 @@ export default function App() {
     const panelHeight = Math.round(vh * 0.7);
     const topGutter = barHeight + 8;
     const maxTop = Math.max(topGutter, vh - panelHeight - gutter);
-    const clampedTop = Math.min(maxTop, Math.max(topGutter, anchor.top));
+    const clampedTop = Math.min(maxTop, Math.max(topGutter, anchor.insetBlockStart));
 
     if (side === 'left') {
-      const rawLeft = anchor.left ?? (anchor.right !== undefined ? vw - panelWidth - anchor.right : gutter);
+      const rawLeft = anchor.insetInlineStart ?? (anchor.insetInlineEnd !== undefined ? vw - panelWidth - anchor.insetInlineEnd : gutter);
       const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
       return {
-        top: clampedTop,
-        left: Math.min(maxLeft, Math.max(gutter, rawLeft)),
-        right: undefined,
+        insetBlockStart: clampedTop,
+        insetInlineStart: Math.min(maxLeft, Math.max(gutter, rawLeft)),
+        insetInlineEnd: undefined,
       };
     }
 
-    const rawRight = anchor.right ?? (anchor.left !== undefined ? vw - panelWidth - anchor.left : gutter);
+    const rawRight = anchor.insetInlineEnd ?? (anchor.insetInlineStart !== undefined ? vw - panelWidth - anchor.insetInlineStart : gutter);
     const maxRight = Math.max(gutter, vw - panelWidth - gutter);
     return {
-      top: clampedTop,
-      left: undefined,
-      right: Math.min(maxRight, Math.max(gutter, rawRight)),
+      insetBlockStart: clampedTop,
+      insetInlineStart: undefined,
+      insetInlineEnd: Math.min(maxRight, Math.max(gutter, rawRight)),
     };
   }, []);
 
@@ -760,8 +807,8 @@ export default function App() {
     const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
 
     return {
-      top: Math.min(maxTop, Math.max(topGutter, anchor.top)),
-      left: Math.min(maxLeft, Math.max(gutter, anchor.left)),
+      insetBlockStart: Math.min(maxTop, Math.max(topGutter, anchor.insetBlockStart)),
+      insetInlineStart: Math.min(maxLeft, Math.max(gutter, anchor.insetInlineStart)),
     };
   }, []);
 
@@ -777,7 +824,6 @@ export default function App() {
         setDockPanelAnchor(null);
         setOpenMenuId(null);
         setCommandMenuAnchor(null);
-        setHoveredDock(null);
         return;
       }
 
@@ -792,8 +838,8 @@ export default function App() {
         setSelectedTileId(rightTile.id);
         setDockModalSide('right');
         setDockPanelAnchor(clampDockAnchor({
-          top: controlBarHeight + 24,
-          right: 56,
+          insetBlockStart: controlBarHeight + 24,
+          insetInlineEnd: 56,
         }, 'right', controlBarHeight));
         setDockModalTileId((prev) => (prev === rightTile.id ? null : rightTile.id));
         return;
@@ -804,8 +850,8 @@ export default function App() {
       setSelectedTileId(leftTile.id);
       setDockModalSide('left');
       setDockPanelAnchor(clampDockAnchor({
-        top: controlBarHeight + 24,
-        left: 56,
+        insetBlockStart: controlBarHeight + 24,
+        insetInlineStart: 56,
       }, 'left', controlBarHeight));
       setDockModalTileId((prev) => (prev === leftTile.id ? null : leftTile.id));
     };
@@ -861,26 +907,8 @@ export default function App() {
   }, [booted]);
 
   useEffect(() => {
-    const node = timeExplorerRef.current;
-    if (!node) {
-      return;
-    }
-
-    const update = () => {
-      const next = Math.max(TIME_EXPLORER_BASE_HEIGHT, Math.ceil(node.getBoundingClientRect().height));
-      setTimeExplorerHeight((prev) => (prev !== next ? next : prev));
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    window.addEventListener('resize', update);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, [booted, currentDate, isTimePlaying]);
+    setTimeExplorerHeight(TIME_EXPLORER_BASE_HEIGHT);
+  }, []);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--time-explorer-height', `${timeExplorerHeight}px`);
@@ -986,21 +1014,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new AudioAtmosphere();
-    }
-    const audio = audioRef.current;
-
     if (audioEnabled) {
-      void audio.enable();
-      audio.updateFromTelemetry(telemetry.kpIndex ?? 0, noaaDonki.bundle?.bzGsm ?? 0, telemetry.windSpeed ?? 400);
-      if (cmeImpactActive) {
-        audio.triggerCMEArrival();
-      }
-    } else {
-      audio.disable();
+      solarSonification.start();
+      return;
     }
-  }, [audioEnabled, cmeImpactActive, noaaDonki.bundle?.bzGsm, telemetry.kpIndex, telemetry.windSpeed]);
+    solarSonification.stop();
+  }, [audioEnabled, solarSonification]);
+
+  useEffect(() => {
+    if (audioEnabled && cmeImpactActive) {
+      solarSonification.triggerCME();
+    }
+  }, [audioEnabled, cmeImpactActive, solarSonification]);
+
   const telemetryTimeline = useMemo<TelemetryTimelinePoint[]>(() => {
     const kpSeries = noaaDonki.bundle?.kpSeries ?? [];
     const points: TelemetryTimelinePoint[] = [];
@@ -1023,11 +1049,6 @@ export default function App() {
     telemetryTimeline,
     maxSkewMs: 1_500,
   });
-
-  const dockSideClass = useMemo(
-    () => (dockModalSide === 'left' ? 'left-[calc(var(--dock-width)+1.75rem)]' : 'right-[calc(var(--dock-width)+1.75rem)]'),
-    [dockModalSide],
-  );
 
   useEffect(() => {
     if (!dockModalTileId) {
@@ -1069,9 +1090,9 @@ export default function App() {
         }
         const next = clampDockAnchor(prev, dockModalSide, controlBarHeight);
         const changed =
-          Math.abs(next.top - prev.top) > 2
-          || Math.abs((next.left ?? 0) - (prev.left ?? 0)) > 2
-          || Math.abs((next.right ?? 0) - (prev.right ?? 0)) > 2;
+          Math.abs(next.insetBlockStart - prev.insetBlockStart) > 2
+          || Math.abs((next.insetInlineStart ?? 0) - (prev.insetInlineStart ?? 0)) > 2
+          || Math.abs((next.insetInlineEnd ?? 0) - (prev.insetInlineEnd ?? 0)) > 2;
         return changed ? next : prev;
       });
     };
@@ -1093,7 +1114,7 @@ export default function App() {
           return prev;
         }
         const next = clampCommandMenuAnchor(prev, controlBarHeight);
-        const changed = Math.abs(next.top - prev.top) > 2 || Math.abs(next.left - prev.left) > 2;
+        const changed = Math.abs(next.insetBlockStart - prev.insetBlockStart) > 2 || Math.abs(next.insetInlineStart - prev.insetInlineStart) > 2;
         return changed ? next : prev;
       });
     };
@@ -1234,7 +1255,7 @@ export default function App() {
               <LazyKesslerNetStats
                 kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
                 cmeActive={cmeActive}
-                cascade={lstmWorker.forecast?.kesslerCascade ?? null}
+                cascade={kesslerWorker.forecast ?? lstmWorker.forecast?.kesslerCascade ?? null}
               />
             </Suspense>
           </div>
@@ -1516,6 +1537,15 @@ export default function App() {
     setChicxulubActive(false);
   };
 
+  const handleRelockCamera = useCallback(() => {
+    const target = currentPlanet ?? 'Earth';
+    setTrackedPlanetName(target);
+  }, [currentPlanet]);
+
+  const handleUnlockCamera = useCallback(() => {
+    setTrackedPlanetName(null);
+  }, []);
+
   const focusOnPlanet = (planetName: string) => {
     setShowDiagnostics(false);
     setCurrentPlanet(planetName as BodyName);
@@ -1738,6 +1768,15 @@ export default function App() {
         setImpactBurstActive(false);
       }
 
+      if (event.key.toLowerCase() === 'f') {
+        const relockTarget = currentPlanet ?? 'Earth';
+        setTrackedPlanetName(relockTarget);
+      }
+
+      if (event.key.toLowerCase() === 'u' && trackedPlanetName) {
+        setTrackedPlanetName(null);
+      }
+
       if (event.key === 'Escape' && trackedPlanetName) {
         setTrackedPlanetName(null);
       }
@@ -1745,7 +1784,7 @@ export default function App() {
 
     window.addEventListener('keydown', keyHandler);
     return () => window.removeEventListener('keydown', keyHandler);
-  }, [openMenuId, trackedPlanetName]);
+  }, [currentPlanet, openMenuId, trackedPlanetName]);
 
   // Carrington sim clock — update panel stats in real-time
   useEffect(() => {
@@ -1781,7 +1820,8 @@ export default function App() {
   }, [telemetry.kpIndex, telemetry.source]);
 
   const noaaFetchAgeSec = hazardModel.noaaFetchAgeSec;
-  const hasCriticalToast = toasts.some((toast) => toast.severity === 'critical');
+  const liveKesslerCascade = kesslerWorker.forecast ?? lstmWorker.forecast?.kesslerCascade ?? null;
+  const kesslerAngularScale = 0.65 + (liveKesslerCascade?.next7dProbability ?? 0) * 3.25;
   const isEarthOrbitalView = currentPlanet === 'Earth' && viewMode !== 'SURFACE';
 
   const shouldRenderEarthBowShock = useMemo(() => {
@@ -1909,6 +1949,36 @@ export default function App() {
     return { checks, missingRequired, missingOptional, level };
   }, []);
 
+  const canvasDpr = useMemo<[number, number]>(() => {
+    if (retroMode) {
+      return [0.125, 0.125];
+    }
+
+    const cap = liteMode || ecoMode ? 1 : 1.5;
+    const floor = ecoMode ? 0.6 : liteMode ? 0.75 : 0.9;
+    const clamped = THREE.MathUtils.clamp(adaptiveDpr, floor, cap);
+    return [clamped, clamped];
+  }, [adaptiveDpr, ecoMode, liteMode, retroMode]);
+
+  const nudgeAdaptiveDpr = useCallback((direction: 'up' | 'down') => {
+    const now = performance.now();
+    // Prevent rapid up/down oscillation that appears as visual flicker.
+    if (now - adaptiveDprLastAdjustAtRef.current < 800) {
+      return;
+    }
+
+    adaptiveDprLastAdjustAtRef.current = now;
+    const cap = liteMode || ecoMode ? 1 : 1.5;
+    const floor = ecoMode ? 0.6 : liteMode ? 0.75 : 0.9;
+
+    setAdaptiveDpr((prev) => {
+      const delta = direction === 'down' ? -0.05 : 0.025;
+      const next = THREE.MathUtils.clamp(Number((prev + delta).toFixed(3)), floor, cap);
+      // Ignore tiny jitter adjustments that are not perceptible.
+      return Math.abs(next - prev) < 0.012 ? prev : next;
+    });
+  }, [ecoMode, liteMode]);
+
   useEffect(() => {
     if (envWarnedRef.current) {
       return;
@@ -1923,23 +1993,44 @@ export default function App() {
     }
   }, [envDiagnostics]);
 
+
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-mono text-cyan-400">
-      <div className="fixed inset-0 z-0 pointer-events-auto">
+      <div
+        className="fixed inset-0 z-0 pointer-events-auto"
+        style={{
+          imageRendering: retroMode ? 'pixelated' : 'auto',
+          filter: retroMode ? 'contrast(1.2) saturate(0.6)' : 'none',
+        }}
+      >
         <SlateErrorBoundary moduleName="Observa-Scene" fallback={<div className="absolute inset-0 bg-black/40" />}>
           <Canvas
-            shadows={!liteMode}
-            dpr={liteMode ? [0.8, 1] : [1, 1.5]}
-            gl={{ antialias: !liteMode, alpha: true, logarithmicDepthBuffer: !liteMode }}
-            onCreated={({ gl }) => {
-              gl.shadowMap.enabled = !liteMode;
-              gl.shadowMap.type = THREE.PCFShadowMap;
+            frameloop="always"
+            shadows={!liteMode && !ecoMode}
+            dpr={canvasDpr}
+            gl={{ antialias: !ecoMode && !retroMode, alpha: true, logarithmicDepthBuffer: true }}
+            onCreated={({ gl, camera }) => {
+              // Ensure camera sees all THREE.Layers (required after any bloom/layer changes)
+              camera.layers.enableAll();
+              gl.shadowMap.enabled = !liteMode && !ecoMode;
+              gl.shadowMap.type = THREE.PCFSoftShadowMap;
               gl.localClippingEnabled = true;
               setTexturesLoaded(true);
             }}
             style={{ position: 'absolute', insetBlockStart: 0, insetInlineStart: 0, zIndex: 0 }}
           >
-            <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} near={0.001} far={2_000_000} />
+            {!retroMode && (
+              <PerformanceMonitor
+                bounds={() => [54, 60]}
+                onDecline={() => {
+                  nudgeAdaptiveDpr('down');
+                }}
+                onIncline={() => {
+                  nudgeAdaptiveDpr('up');
+                }}
+              />
+            )}
+            <PerspectiveCamera makeDefault position={[0, 150, 300]} fov={65} near={0.01} far={1_500_000} />
             <EarthZoomLadderController
               active={currentPlanet === 'Earth'}
               viewMode={viewMode}
@@ -2013,6 +2104,10 @@ export default function App() {
                     onPlanetRefsReady={setPlanetRefs}
                     epochYear={useDeepTimeEpoch ? selectedEpochYear : undefined}
                     positionOverridesAu={highPrecisionModeEnabled ? highPrecisionVectors : undefined}
+                    focusedPlanetName={currentPlanet}
+                    kpIndex={noaaDonki.bundle?.latestKp ?? telemetry.kpIndex ?? 0}
+                    kesslerCascade={liveKesslerCascade}
+                    auroraEnabled={!ecoMode}
                   />
                   {/* Apophis 2029 flyby orbit */}
                   <LazyApophisTracker visible={apophisVisible} epochYear={selectedEpochYear} />
@@ -2020,6 +2115,9 @@ export default function App() {
                     targetName={trackedPlanetName}
                     planetRefs={planetRefs}
                     isEnabled={!!trackedPlanetName}
+                    onManualOverride={() => {
+                      setTrackedPlanetName(null);
+                    }}
                   />
                   <LazyCMEPropagationVisualizer
                     isActive={cmeActive}
@@ -2132,7 +2230,7 @@ export default function App() {
               onAltitudeChange={setSurfaceAltitudeKm}
               sampleTerrainHeight={(x, z) => terrainSamplerRef.current(x, z)}
             />
-            {!liteMode && (
+            {!liteMode && !ecoMode && (
               <Suspense fallback={null}>
                 <LazyCinematicPostFX
                   quality={fxQuality}
@@ -2153,7 +2251,7 @@ export default function App() {
             isReversal ? 'skoll-reversal-banner border-red-500/50' : 'border-cyan-500/30',
           ].join(' ')}
         >
-          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
             <div className="aurora-command-pill min-w-0 flex items-center gap-2">
               <span className={`status-dot ${hazardModel.apiHealth}`} aria-hidden="true" />
               <span className="text-[9px] uppercase tracking-[0.16em] text-cyan-100 truncate">
@@ -2169,7 +2267,7 @@ export default function App() {
                   if (next === null) {
                     setCommandMenuAnchor(null);
                   } else {
-                    setCommandMenuAnchor(clampCommandMenuAnchor({ top: controlBarHeight + 8, left: 12 }, controlBarHeight));
+                    setCommandMenuAnchor(clampCommandMenuAnchor({ insetBlockStart: controlBarHeight + 8, insetInlineStart: 12 }, controlBarHeight));
                     const groupIds = menuGroups['live-telemetry'] ?? [];
                     if (groupIds.length > 0) {
                       setActiveSubTileId(groupIds[0]);
@@ -2182,60 +2280,121 @@ export default function App() {
               <span className="text-[8px] uppercase tracking-[0.18em] text-cyan-400/80">Ask Sköll</span>
               <span className="ml-1 text-[9px] uppercase tracking-[0.1em] text-cyan-100">/ to query live systems</span>
             </button>
-            <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-2">
+            <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-4">
               <MissionUTCTime />
               <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
               <LocationSwitcher value={location} onChange={setLocation} />
+              <span
+                className={`rounded border px-1.5 py-0.5 text-[8px] tracking-[0.14em] ${trackedPlanetName ? 'border-emerald-400/45 bg-emerald-500/15 text-emerald-100' : 'border-cyan-500/35 bg-black/25 text-cyan-300/90'}`}
+                title={trackedPlanetName ? 'Camera tracking locked to selected body' : 'Camera is in free-fly mode'}
+              >
+                {trackedPlanetName ? `Track ${trackedPlanetName}` : 'Free Cam'}
+              </span>
+              <button
+                type="button"
+                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${trackedPlanetName ? 'border-amber-400/45 bg-amber-500/15 text-amber-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                onClick={trackedPlanetName ? handleUnlockCamera : handleRelockCamera}
+                title={trackedPlanetName ? 'Unlock camera follow (U)' : `Re-lock follow to ${currentPlanet ?? 'Earth'} (F)`}
+                aria-label={trackedPlanetName ? 'Unlock camera follow' : 'Re-lock camera follow'}
+              >
+                {trackedPlanetName ? 'Unlock' : 'Re-lock'}
+              </button>
             </div>
             <div className="aurora-command-pill min-w-0 flex items-center gap-2 justify-start md:justify-end">
-              <button
-                type="button"
-                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${audioEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
-                onClick={() => setAudioEnabled((prev) => !prev)}
-                title="Toggle space-weather sonification"
-              >
-                Audio {audioEnabled ? 'On' : 'Off'}
-              </button>
-              <button
-                type="button"
-                className="h-6 rounded border border-cyan-500/35 bg-black/20 px-2 text-[8px] uppercase tracking-[0.12em] text-cyan-300/90"
-                onClick={() => void requestNotificationPermission()}
-                title="Enable browser notifications"
-              >
-                Alerts {('Notification' in window) ? Notification.permission : 'n/a'}
-              </button>
-              <button
-                type="button"
-                className="h-6 rounded border border-cyan-500/35 bg-black/20 px-2 text-[8px] uppercase tracking-[0.12em] text-cyan-300/90"
-                onClick={() => void handleShareSnapshot()}
-                title="Copy shareable snapshot URL"
-              >
-                Share
-              </button>
-              <button
-                type="button"
-                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${liteMode ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
-                onClick={() => {
-                  setLiteMode((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      setFxQuality('LOW');
-                    }
-                    return next;
-                  });
-                }}
-                title="Reduce GPU load"
-              >
-                Lite {liteMode ? 'On' : 'Off'}
-              </button>
-              <button
-                type="button"
-                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${relayEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
-                onClick={() => setRelayEnabled((prev) => !prev)}
-                title="Relay warning/critical alerts to configured webhook"
-              >
-                Relay {relayEnabled ? 'On' : 'Off'}
-              </button>
+              <CosmicTooltip content={{ title: audioEnabled ? 'Mute Sonification' : 'Enable Sonification', emoji: '🔊', accentColor: '#06b6d4', description: 'Toggle real-time space-weather audio sonification.' }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${audioEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={() => {
+                    setAudioEnabled((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        solarSonification.start();
+                      } else {
+                        solarSonification.stop();
+                      }
+                      return next;
+                    });
+                  }}
+                  aria-label={audioEnabled ? 'Mute sonification' : 'Enable sonification'}
+                >
+                  {audioEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: 'Browser Alerts', emoji: '🔔', accentColor: '#f59e0b', description: 'Enable native browser notification permission.' }}>
+                <button
+                  type="button"
+                  className="skoll-dock-button h-7 w-7 rounded border border-cyan-500/35 bg-black/20 text-cyan-300/90 flex items-center justify-center"
+                  onClick={() => void requestNotificationPermission()}
+                  aria-label="Enable browser notifications"
+                >
+                  <Bell size={13} />
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: 'Share Snapshot', emoji: '🔗', accentColor: '#8b5cf6', description: 'Copy current mission-state snapshot URL.' }}>
+                <button
+                  type="button"
+                  className="skoll-dock-button h-7 w-7 rounded border border-cyan-500/35 bg-black/20 text-cyan-300/90 flex items-center justify-center"
+                  onClick={() => void handleShareSnapshot()}
+                  aria-label="Copy shareable snapshot URL"
+                >
+                  <Share2 size={13} />
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: liteMode ? 'Lite Mode On' : 'Lite Mode Off', emoji: '⚡', accentColor: '#06b6d4', description: 'Reduce expensive visual effects to improve FPS.' }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${liteMode ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={() => {
+                    setLiteMode((prev) => {
+                      const next = !prev;
+                      if (next) { setFxQuality('LOW'); }
+                      return next;
+                    });
+                  }}
+                  aria-label="Toggle lite mode"
+                >
+                  <Zap size={13} />
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: ecoMode ? 'Eco Mode On' : 'Eco Mode Off', emoji: '🌿', accentColor: '#22c55e', description: 'Disables aurora shader and bloom/post FX for power-safe rendering.' }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${ecoMode ? 'border-emerald-300 bg-emerald-500/20 text-emerald-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={() => {
+                    setEcoMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setFxQuality('LOW');
+                      }
+                      return next;
+                    });
+                  }}
+                  aria-label="Toggle eco mode"
+                >
+                  <Leaf size={13} />
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: retroMode ? 'Retro Mode On' : 'Retro Mode Off', emoji: '👾', accentColor: '#9bbc0f', description: 'Apply pixel-art visual filter for retro styling.' }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${retroMode ? 'border-[#9bbc0f] bg-[#0f380f]/60 text-[#9bbc0f]' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={() => setRetroMode((prev) => !prev)}
+                  aria-label="Toggle retro pixel mode"
+                >
+                  <Gamepad2 size={13} />
+                </button>
+              </CosmicTooltip>
+              <CosmicTooltip content={{ title: relayEnabled ? 'Relay On' : 'Relay Off', emoji: '📡', accentColor: '#06b6d4', description: 'Forward warning and critical alerts to the configured relay.' }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${relayEnabled ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={() => setRelayEnabled((prev) => !prev)}
+                  aria-label="Toggle alert relay"
+                >
+                  <Radio size={13} />
+                </button>
+              </CosmicTooltip>
               <div className="h-6 w-6 rounded-md border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
                 <Orbit size={13} />
               </div>
@@ -2260,8 +2419,8 @@ export default function App() {
       <div
         className="app-interaction-layer fixed inset-x-0 z-50 pointer-events-none select-none overflow-hidden"
         style={{
-          top: controlBarHeight,
-          bottom: timeExplorerHeight,
+          insetBlockStart: controlBarHeight,
+          insetBlockEnd: timeExplorerHeight,
         }}
       >
         {booted && (
@@ -2269,175 +2428,134 @@ export default function App() {
             {/* ═══ Side Rails + Overlay Slates ═══ */}
             {!hudMinimized && (
               <>
-                <div className="absolute left-3 z-40 flex flex-col gap-2 pointer-events-auto" style={{ top: 12, bottom: 16 }}>
-                  {leftDockTiles.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onMouseEnter={(event) => {
-                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                        setHoveredDock({
-                          label: item.label,
-                          status: getDockStatus(item.id),
-                          x: rect.right + 10,
-                          y: rect.top + rect.height / 2,
-                          side: 'left',
-                        });
-                      }}
-                      onMouseLeave={() => setHoveredDock(null)}
-                      onClick={(event) => {
-                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                        setDockPanelAnchor(clampDockAnchor({
-                          top: rect.bottom + 8,
-                          left: Math.max(12, rect.right + 12),
-                        }, 'left', controlBarHeight));
-                        setSelectedTileId(item.id);
-                        setDockModalSide('left');
-                        setDockModalTileId((prev) => (prev === item.id ? null : item.id));
-                      }}
-                      className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
-                    >
-                      <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
-                      {item.icon}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                      setOpenMenuId('all-tools');
-                      setCommandMenuAnchor(clampCommandMenuAnchor({
-                        top: rect.top - 12,
-                        left: rect.right + 12,
-                      }, controlBarHeight));
-                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
-                    }}
-                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
-                    title="More tools"
-                    aria-label="More tools"
-                  >
-                    ⋯
-                  </button>
-                </div>
-
-                <div className="absolute right-3 z-40 flex flex-col gap-2 pointer-events-auto" style={{ top: 12, bottom: 16 }}>
-                  {rightDockTiles.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onMouseEnter={(event) => {
-                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                        setHoveredDock({
-                          label: item.label,
-                          status: getDockStatus(item.id),
-                          x: rect.left - 10,
-                          y: rect.top + rect.height / 2,
-                          side: 'right',
-                        });
-                      }}
-                      onMouseLeave={() => setHoveredDock(null)}
-                      onClick={(event) => {
-                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                        setDockPanelAnchor(clampDockAnchor({
-                          top: rect.bottom + 8,
-                          right: Math.max(12, window.innerWidth - rect.left + 12),
-                        }, 'right', controlBarHeight));
-                        setSelectedTileId(item.id);
-                        setDockModalSide('right');
-                        setDockModalTileId((prev) => (prev === item.id ? null : item.id));
-                      }}
-                      className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
-                    >
-                      <span className={`absolute left-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
-                      {item.icon}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                      setOpenMenuId('all-tools');
-                      setCommandMenuAnchor(clampCommandMenuAnchor({
-                        top: rect.top - 12,
-                        left: rect.left - 360,
-                      }, controlBarHeight));
-                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
-                    }}
-                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
-                    title="More tools"
-                    aria-label="More tools"
-                  >
-                    ⋯
-                  </button>
-                </div>
-
-                {hoveredDock && (
+                {/* Backdrop — closes modal when clicking outside */}
+                {dockModalTileId && (
                   <div
-                    className="fixed z-50 pointer-events-none rounded border border-cyan-500/30 bg-black/80 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-cyan-200"
-                    style={{
-                      left: hoveredDock.side === 'left' ? hoveredDock.x : undefined,
-                      right: hoveredDock.side === 'right' ? `calc(100vw - ${hoveredDock.x}px)` : undefined,
-                      top: hoveredDock.y,
-                      transform: hoveredDock.side === 'left' ? 'translateY(-50%)' : 'translate(-100%, -50%)',
-                    }}
-                  >
-                    <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${dockStatusClass[hoveredDock.status]}`} />
-                    {hoveredDock.label}
-                  </div>
+                    className="fixed inset-0 z-[49] bg-black/10 pointer-events-auto"
+                    onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }}
+                  />
                 )}
 
-                {dockModalTileId && createPortal(
-                  <>
-                    <div
-                      className="fixed inset-0 z-40 bg-black/10 pointer-events-auto"
-                      onClick={() => {
-                        setDockModalTileId(null);
-                        setDockPanelAnchor(null);
-                      }}
-                    />
+                <div className="absolute left-4 z-50 flex flex-col gap-2 pointer-events-auto overflow-visible" style={{ insetBlockStart: 12, insetBlockEnd: 16 }}>
+                  {leftDockTiles.map((item) => (
+                    <CosmicTooltip
+                      key={item.id}
+                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: item.icon, accentColor: '#06b6d4' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTileId(item.id);
+                          setDockModalSide('left');
+                          setDockModalTileId((prev) => (prev === item.id ? null : item.id));
+                        }}
+                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
+                      >
+                        <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
+                        {item.icon}
+                      </button>
+                    </CosmicTooltip>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                      setOpenMenuId('all-tools');
+                      setCommandMenuAnchor(clampCommandMenuAnchor({
+                        insetBlockStart: rect.top - 12,
+                        insetInlineStart: rect.right + 12,
+                      }, controlBarHeight));
+                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                    }}
+                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
+                    title="More tools"
+                    aria-label="More tools"
+                  >
+                    ⋯
+                  </button>
+                {/* Left dock modal — absolute, opens to the right of the icon column */}
+                {dockModalSide === 'left' && dockModalTileId && (
+                  <motion.div
+                    ref={dockPanelRef}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -12 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="nasa-slate skoll-slate-shell skoll-floating-popover absolute left-full ml-2 top-0 z-50 w-80 max-w-[min(92vw,22rem)] p-3 pointer-events-auto"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
+                        {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
+                      </div>
+                      <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
+                    </div>
+                    <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
+                      {renderSubmenuContent(dockModalTileId)}
+                    </div>
+                  </motion.div>
+                )}
+                </div>
+
+                <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2 pointer-events-auto overflow-visible">
+                  {rightDockTiles.map((item) => (
+                    <CosmicTooltip
+                      key={item.id}
+                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: item.icon, accentColor: '#8b5cf6' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTileId(item.id);
+                          setDockModalSide('right');
+                          setDockModalTileId((prev) => (prev === item.id ? null : item.id));
+                        }}
+                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
+                      >
+                        <span className={`absolute left-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
+                        {item.icon}
+                      </button>
+                    </CosmicTooltip>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                      setOpenMenuId('all-tools');
+                      setCommandMenuAnchor(clampCommandMenuAnchor({
+                        insetBlockStart: rect.top - 12,
+                        insetInlineStart: rect.left - 360,
+                      }, controlBarHeight));
+                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                    }}
+                    className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
+                    title="More tools"
+                    aria-label="More tools"
+                  >
+                    ⋯
+                  </button>
+
+                  {/* Right dock modal — absolute, opens to the left of the icon column */}
+                  {dockModalSide === 'right' && dockModalTileId && (
                     <motion.div
                       ref={dockPanelRef}
-                      initial={{ opacity: 0, x: dockModalSide === 'left' ? -16 : 16 }}
+                      initial={{ opacity: 0, x: 12 }}
                       animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: dockModalSide === 'left' ? -16 : 16 }}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                      className={`nasa-slate skoll-slate-shell skoll-floating-popover fixed top-[7rem] z-50 w-[min(92vw,40rem)] max-w-[42rem] p-3 pointer-events-auto ${dockSideClass}`}
-                      style={dockPanelAnchor
-                        ? dockModalSide === 'left'
-                          ? {
-                              top: dockPanelAnchor.top,
-                              left: dockPanelAnchor.left,
-                            }
-                          : {
-                              top: dockPanelAnchor.top,
-                              right: dockPanelAnchor.right,
-                            }
-                        : undefined}
+                      exit={{ opacity: 0, x: 12 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="nasa-slate skoll-slate-shell skoll-floating-popover absolute right-full mr-2 top-0 z-50 w-80 max-w-[min(92vw,22rem)] p-3 pointer-events-auto"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
                           {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDockModalTileId(null);
-                            setDockPanelAnchor(null);
-                          }}
-                          className="skoll-circle-action skoll-circle-action-danger"
-                          aria-label="Close panel"
-                          title="Close"
-                        >
-                          ✕
-                        </button>
+                        <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
                       </div>
                       <div className="max-h-[68vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1">
                         {renderSubmenuContent(dockModalTileId)}
                       </div>
                     </motion.div>
-                  </>,
-                  document.body,
-                )}
+                  )}
+                </div>
               </>
             )}
 
@@ -2506,15 +2624,15 @@ export default function App() {
 
             {viewMode === 'SURFACE' && (
               <>
-                <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ top: 12 }}>Exit Landing</button>
-                <div className="absolute left-6 pointer-events-none rounded border border-cyan-500/30 bg-black/70 px-3 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100" style={{ top: 12 }}>
+                <button type="button" onClick={() => setViewMode('HELIOCENTRIC')} className="absolute right-6 pointer-events-auto h-7 px-3 text-[9px] uppercase tracking-[0.2em] border border-cyan-400/40 bg-black/60 backdrop-blur-md text-cyan-100" style={{ insetBlockStart: 12 }}>Exit Landing</button>
+                <div className="absolute left-6 pointer-events-none rounded border border-cyan-500/30 bg-black/70 px-3 py-1 text-[9px] uppercase tracking-[0.14em] text-cyan-100" style={{ insetBlockStart: 12 }}>
                   Altitude {surfaceAltitudeKm.toFixed(2)} km
                 </div>
               </>
             )}
 
             {toasts.length > 0 && (
-              <div className="pointer-events-none fixed right-3 z-[120] flex w-[min(92vw,22rem)] flex-col gap-1" style={{ top: controlBarHeight + 12 }}>
+              <div className="pointer-events-none fixed right-3 z-[120] flex w-[min(92vw,22rem)] flex-col gap-1" style={{ insetBlockStart: controlBarHeight + 12 }}>
                 {toasts.slice(0, 4).map((toast) => (
                   <div
                     key={`${toast.id}-${toast.ts}`}
@@ -2548,12 +2666,12 @@ export default function App() {
                 className="nasa-slate skoll-slate-shell skoll-floating-popover fixed z-[110] pointer-events-auto w-[min(92vw,720px)] min-w-[320px] sm:min-w-[420px] p-2"
                 style={commandMenuAnchor
                   ? {
-                      top: commandMenuAnchor.top,
-                      left: commandMenuAnchor.left,
+                      insetBlockStart: commandMenuAnchor.insetBlockStart,
+                      insetInlineStart: commandMenuAnchor.insetInlineStart,
                     }
                   : {
-                      top: controlBarHeight + 8,
-                      left: 16,
+                      insetBlockStart: controlBarHeight + 8,
+                      insetInlineStart: 16,
                     }}
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
@@ -2619,7 +2737,13 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <div className="fixed bottom-[calc(var(--time-explorer-height)+0.5rem)] right-3 sm:right-4 z-[99] pointer-events-auto select-none">
+          <div className="fixed bottom-[calc(var(--time-explorer-height)+0.5rem)] right-3 sm:right-4 z-[99] pointer-events-auto select-none flex flex-col items-end gap-1.5">
+            <SlateErrorBoundary moduleName="KesslerTelemetryChip">
+              <KesslerTelemetryChip
+                next24hProbability={liveKesslerCascade?.next24hProbability ?? null}
+                angularScale={kesslerAngularScale}
+              />
+            </SlateErrorBoundary>
             <div className="rounded-md border border-cyan-500/35 bg-black/50 px-2 py-1 backdrop-blur-md text-[8px] uppercase tracking-[0.08em] text-cyan-200 font-mono">
               <span className="telemetry-value">FPS {fps}</span>
               <span className="mx-1 text-cyan-500/40">|</span>
@@ -2768,7 +2892,7 @@ export default function App() {
               {timelineContextMenu && (
                 <div
                   className="fixed z-[10020] rounded border border-cyan-500/35 bg-black/90 p-1 min-w-[180px]"
-                  style={{ left: timelineContextMenu.x, top: timelineContextMenu.y }}
+                  style={{ insetInlineStart: timelineContextMenu.x, insetBlockStart: timelineContextMenu.y }}
                 >
                   <button
                     type="button"
@@ -2821,18 +2945,17 @@ export default function App() {
       )}
 
       {!booted && (
-        <div className="fixed inset-0 z-[110] pointer-events-auto">
-          {hasCriticalToast && (
-            <div className="pointer-events-none fixed inset-0 z-[118] skoll-critical-vignette" />
-          )}
-          <NeuralBoot
-            isLoaded={texturesLoaded && telemetry.kp !== undefined}
+        <SlateErrorBoundary
+          moduleName="RetroBoot"
+          fallback={null}
+        >
+          <RetroBoot
             onComplete={() => {
               setBooted(true);
               setViewMode('HELIOCENTRIC');
             }}
           />
-        </div>
+        </SlateErrorBoundary>
       )}
     </div>
   );

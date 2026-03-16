@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 /**
@@ -73,6 +73,7 @@ export default function EarthCloudLayer({
   currentDate,
   isLiveMode = true,
 }: EarthCloudLayerProps) {
+  const { camera } = useThree();
   const meshRef    = useRef<THREE.Mesh>(null!);
   const matRef     = useRef<THREE.ShaderMaterial>(null!);
   const loaderRef = useRef(new THREE.TextureLoader());
@@ -89,6 +90,7 @@ export default function EarthCloudLayer({
   }, [owmApiKey]);
 
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  const lodFadeRef = useRef(1);
 
   useEffect(() => {
     let mounted = true;
@@ -125,14 +127,21 @@ export default function EarthCloudLayer({
     };
   }, [buildCloudUrl, owmApiKey]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!meshRef.current || !visible) return;
     const motionTimeMs = isLiveMode ? Date.now() : (currentDate?.getTime() ?? Date.now());
     const turns = (motionTimeMs / 1000) / EARTH_SIDEREAL_SECONDS;
     meshRef.current.rotation.y = (turns % 1) * Math.PI * 2;
     meshRef.current.position.copy(earthPos);
+
+    const distance = camera.position.distanceTo(earthPos);
+    const targetFade = 1 - THREE.MathUtils.smoothstep(distance, 130, 460);
+    const smooth = 1 - Math.exp(-delta * 6.5);
+    lodFadeRef.current = THREE.MathUtils.lerp(lodFadeRef.current, targetFade, smooth);
+
     if (texture && matRef.current) {
       matRef.current.uniforms.uCloudTex.value = texture;
+      matRef.current.uniforms.uOpacity.value = opacity * lodFadeRef.current;
     }
   });
 
@@ -150,10 +159,12 @@ export default function EarthCloudLayer({
           uOpacity:  { value: opacity },
         }}
         transparent
+        depthTest
         depthWrite={false}
+        alphaTest={0.02}
         polygonOffset
-        polygonOffsetFactor={-2}
-        polygonOffsetUnits={-2}
+        polygonOffsetFactor={-3}
+        polygonOffsetUnits={-3}
         side={THREE.FrontSide}
         blending={THREE.NormalBlending}
       />

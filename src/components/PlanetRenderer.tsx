@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import planetData from '../ml/planet_facts.json';
 import { useCameraFocus } from '../hooks/useCameraFocus';
@@ -10,8 +10,11 @@ import { MagneticTailVisualizer } from './MagneticTailVisualizer';
 import { OrbitalTrail } from './OrbitalTrail';
 import { AtmosphericGlow } from './AtmosphericGlow';
 import { AsteroidBelt } from './AsteroidBelt';
+import KesslerThreatNet from './KesslerThreatNet';
 import { calculateOrbitalPosition, calculateOrbitalPositionByT, epochYearToT } from '../ml/OrbitalMechanics';
 import { usePlanetTooltip } from './CosmicTooltip';
+import { SlateErrorBoundary } from './SlateErrorBoundary';
+import type { KesslerCascadeForecast } from '../ml/types';
 
 const EarthMaterial = ({ dayMap, nightMap }: { dayMap: THREE.Texture; nightMap: THREE.Texture }) => {
   const shaderRef = useRef<THREE.ShaderMaterial>(null);
@@ -149,33 +152,9 @@ const SIDEREAL_ROTATION_HOURS: Record<string, number> = {
   Pluto: 153.2928,
 };
 
-const AURORA_VERTEX_SHADER = `
-varying vec2 vUv;
-
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const AURORA_OVAL_FRAGMENT_SHADER = `
-varying vec2 vUv;
-uniform float uTime;
-uniform vec3 uColor;
-uniform float uIntensity;
-
-void main() {
-  float pulse = 0.65 + 0.35 * sin(uTime * 1.8);
-  float edge = smoothstep(0.0, 0.25, vUv.y) * (1.0 - smoothstep(0.72, 1.0, vUv.y));
-  float sweep = 0.4 + 0.6 * sin((vUv.x * 12.0) + uTime * 1.6);
-  float alpha = edge * sweep * pulse * uIntensity;
-  gl_FragColor = vec4(uColor, alpha);
-}
-`;
-
 /**
- * AuroraOval — dual-hemisphere glowing rings at geomagnetically correct
- * polar latitudes using spherical polar coordinates.
+ * AuroraOval (RC-safe) — dual-hemisphere ring mesh using MeshStandardMaterial.
+ * This intentionally avoids custom GLSL to remove shader compile risk.
  *
  * OVATION-Prime colatitude model (simplified):
  *   colatitude (° from pole) = 20 + kpIndex × 2
@@ -195,61 +174,96 @@ const AuroraOval = ({
   intensity: number;
   kpIndex?: number;
 }) => {
-  const matNRef = useRef<THREE.ShaderMaterial>(null);
-  const matSRef = useRef<THREE.ShaderMaterial>(null);
+  const { camera } = useThree();
+  const northRef = useRef<THREE.Mesh>(null);
+  const northMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const southMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const lodFadeRef = useRef(1);
+  const tmpWorldPos = useMemo(() => new THREE.Vector3(), []);
+
+  const auroraColor = useMemo(() => {
+    const quiet = new THREE.Color('#00ff66');
+    const storm = new THREE.Color('#66ccff');
+    const kpT = THREE.MathUtils.clamp(kpIndex / 9, 0, 1);
+    return quiet.clone().lerp(storm, kpT).lerp(color, 0.2);
+  }, [color, kpIndex]);
 
   // Colatitude from magnetic pole → geomagnetic latitude
   const colatDeg   = Math.min(38, 20 + kpIndex * 2);
   const latRad     = THREE.MathUtils.degToRad(90 - colatDeg);
-  // Slightly above the surface to avoid z-fighting
   const Rs         = radius * 1.018;
-  const ovalRadius = Rs * Math.cos(latRad);           // ring circle radius
-  const yOffset    = Rs * Math.sin(latRad);           // height from equatorial plane
+  const ovalRadius = Rs * Math.cos(latRad);
+  const yOffset    = Rs * Math.sin(latRad);
   const bandW      = ovalRadius * (0.12 + intensity * 0.07);
   const innerR     = Math.max(0.01, ovalRadius - bandW * 0.5);
   const outerR     = ovalRadius + bandW * 0.5;
 
-  useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    for (const ref of [matNRef, matSRef]) {
-      if (ref.current) {
-        ref.current.uniforms.uTime.value    = t;
-        ref.current.uniforms.uColor.value   = color;
-        ref.current.uniforms.uIntensity.value = intensity;
-      }
-    }
-  });
+  useFrame((_, delta) => {
+    const north = northRef.current;
+    if (!north) return;
 
-  const sharedUniforms = () => ({
-    uTime:      { value: 0 },
-    uColor:     { value: color.clone() },
-    uIntensity: { value: intensity },
+    north.getWorldPosition(tmpWorldPos);
+    const distance = camera.position.distanceTo(tmpWorldPos);
+    const targetFade = 1 - THREE.MathUtils.smoothstep(distance, 140, 520);
+    const alpha = 1 - Math.exp(-delta * 7.5);
+    lodFadeRef.current = THREE.MathUtils.lerp(lodFadeRef.current, targetFade, alpha);
+
+    const effectiveIntensity = intensity * lodFadeRef.current;
+    const nextOpacity = THREE.MathUtils.clamp(0.06 + effectiveIntensity * 0.14, 0.02, 0.55);
+    const nextEmissive = THREE.MathUtils.clamp(0.12 + effectiveIntensity * 0.46, 0.1, 0.95);
+
+    if (northMatRef.current) {
+      northMatRef.current.opacity = nextOpacity;
+      northMatRef.current.emissiveIntensity = nextEmissive;
+    }
+    if (southMatRef.current) {
+      southMatRef.current.opacity = nextOpacity;
+      southMatRef.current.emissiveIntensity = nextEmissive;
+    }
   });
 
   return (
     <>
       {/* Northern auroral oval — positive Y = geographical north */}
-      <mesh position={[0, yOffset, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh ref={northRef} position={[0, yOffset, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={14}>
         <ringGeometry args={[innerR, outerR, 96]} />
-        <shaderMaterial
-          ref={matNRef}
-          transparent toneMapped={false} depthWrite={false}
-          side={THREE.DoubleSide} blending={THREE.AdditiveBlending}
-          vertexShader={AURORA_VERTEX_SHADER}
-          fragmentShader={AURORA_OVAL_FRAGMENT_SHADER}
-          uniforms={sharedUniforms()}
+        <meshStandardMaterial
+          ref={northMatRef}
+          color={auroraColor}
+          emissive={auroraColor}
+          emissiveIntensity={THREE.MathUtils.clamp(0.2 + intensity * 0.4, 0.2, 0.85)}
+          transparent
+          opacity={THREE.MathUtils.clamp(0.14 + intensity * 0.12, 0.14, 0.5)}
+          depthTest
+          depthWrite={false}
+          alphaTest={0.015}
+          polygonOffset
+          polygonOffsetFactor={-3}
+          polygonOffsetUnits={-3}
+          side={THREE.DoubleSide}
+          roughness={0.7}
+          metalness={0.0}
         />
       </mesh>
       {/* Southern auroral oval — mirror at negative Y */}
-      <mesh position={[0, -yOffset, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -yOffset, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={14}>
         <ringGeometry args={[innerR, outerR, 96]} />
-        <shaderMaterial
-          ref={matSRef}
-          transparent toneMapped={false} depthWrite={false}
-          side={THREE.DoubleSide} blending={THREE.AdditiveBlending}
-          vertexShader={AURORA_VERTEX_SHADER}
-          fragmentShader={AURORA_OVAL_FRAGMENT_SHADER}
-          uniforms={sharedUniforms()}
+        <meshStandardMaterial
+          ref={southMatRef}
+          color={auroraColor}
+          emissive={auroraColor}
+          emissiveIntensity={THREE.MathUtils.clamp(0.2 + intensity * 0.4, 0.2, 0.85)}
+          transparent
+          opacity={THREE.MathUtils.clamp(0.14 + intensity * 0.12, 0.14, 0.5)}
+          depthTest
+          depthWrite={false}
+          alphaTest={0.015}
+          polygonOffset
+          polygonOffsetFactor={-3}
+          polygonOffsetUnits={-3}
+          side={THREE.DoubleSide}
+          roughness={0.7}
+          metalness={0.0}
         />
       </mesh>
     </>
@@ -359,6 +373,7 @@ const MoonBody = ({
   const texturePath = TEXTURE_MAP[name.toLowerCase()] || '/textures/2k_moon.jpg';
   const moonTexture = useLoader(THREE.TextureLoader, texturePath);
   const orbitalPeriodDays = MOON_ORBITAL_PERIOD_DAYS[name] ?? 27.321661;
+  const moonTargetPosRef = useRef(new THREE.Vector3());
 
   // Register this moon with the tracking system
   useEffect(() => {
@@ -378,19 +393,25 @@ const MoonBody = ({
 
     if (positionOverrideAu && parentPositionAuRef) {
       const parent = parentPositionAuRef.current;
-      moonGroupRef.current.position.set(
+      moonTargetPosRef.current.set(
         (positionOverrideAu.x - parent.x) * AU_SCALE,
         (positionOverrideAu.y - parent.y) * AU_SCALE,
         (positionOverrideAu.z - parent.z) * AU_SCALE,
       );
-      return;
+    } else {
+      moonTargetPosRef.current.set(
+        Math.cos(orbitAngle) * moonOrbitRadius,
+        0,
+        Math.sin(orbitAngle) * moonOrbitRadius,
+      );
     }
 
-    moonGroupRef.current.position.set(
-      Math.cos(orbitAngle) * moonOrbitRadius,
-      0,
-      Math.sin(orbitAngle) * moonOrbitRadius,
-    );
+    const smooth = 1 - Math.exp(-delta * 10.5);
+    if (moonGroupRef.current.position.distanceToSquared(moonTargetPosRef.current) > 900) {
+      moonGroupRef.current.position.copy(moonTargetPosRef.current);
+    } else {
+      moonGroupRef.current.position.lerp(moonTargetPosRef.current, smooth);
+    }
   });
 
   return (
@@ -443,6 +464,10 @@ const PlanetBody = ({
   registerRef,
   epochYearRef,
   positionOverridesAu,
+  suppressTooltip,
+  kpIndex,
+  kesslerCascade,
+  auroraEnabled,
 }: {
   name: BodyName;
   currentIntensity: number;
@@ -457,12 +482,16 @@ const PlanetBody = ({
   registerRef?: (name: string, ref: THREE.Group) => void;
   epochYearRef?: MutableRefObject<number>;
   positionOverridesAu?: Record<string, { x: number; y: number; z: number }>;
+  suppressTooltip?: boolean;
+  kpIndex?: number;
+  kesslerCascade?: KesslerCascadeForecast | null;
+  auroraEnabled?: boolean;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null!);
   const groupRef = useRef<THREE.Group>(null!);
   const saturnRingRef = useRef<THREE.Mesh>(null);
   const { focusOnPlanet } = useCameraFocus();
-  const tooltipHandlers = usePlanetTooltip(name);
+  const tooltipHandlers = usePlanetTooltip(name, suppressTooltip);
   const constants = SYSTEM_CONSTANTS[name];
   const fact = facts.get(name);
   const texturePath = TEXTURE_MAP[name.toLowerCase()] || '/textures/2k_mercury.jpg';
@@ -470,6 +499,7 @@ const PlanetBody = ({
   const nightTexture = useLoader(THREE.TextureLoader, '/textures/8k_earth_nightmap.jpg');
   const drift = useMagneticDrift(name, currentDate);
   const parentPositionAuRef = useRef(new THREE.Vector3());
+  const planetTargetPosRef = useRef(new THREE.Vector3());
 
   // Register this planet's ref with the parent
   useEffect(() => {
@@ -505,15 +535,27 @@ const PlanetBody = ({
       const T = epochYearToT(epochYearRef.current);
       const pos = calculateOrbitalPositionByT(name, T);
       parentPositionAuRef.current.set(pos.x, pos.y, pos.z);
-      groupRef.current.position.set(pos.x * AU_SCALE, pos.y * AU_SCALE, pos.z * AU_SCALE);
+      planetTargetPosRef.current.set(pos.x * AU_SCALE, pos.y * AU_SCALE, pos.z * AU_SCALE);
     } else if (positionOverridesAu?.[name]) {
       const pos = positionOverridesAu[name];
       parentPositionAuRef.current.set(pos.x, pos.y, pos.z);
-      groupRef.current.position.set(pos.x * AU_SCALE, pos.y * AU_SCALE, pos.z * AU_SCALE);
+      planetTargetPosRef.current.set(pos.x * AU_SCALE, pos.y * AU_SCALE, pos.z * AU_SCALE);
     } else {
-      parentPositionAuRef.current.set(baseOrbitalPosition.x / AU_SCALE, baseOrbitalPosition.y / AU_SCALE, baseOrbitalPosition.z / AU_SCALE);
-      groupRef.current.position.copy(baseOrbitalPosition);
+      planetTargetPosRef.current.copy(baseOrbitalPosition);
     }
+
+    const smooth = 1 - Math.exp(-delta * 8.5);
+    if (groupRef.current.position.lengthSq() === 0 || groupRef.current.position.distanceToSquared(planetTargetPosRef.current) > 220_000) {
+      groupRef.current.position.copy(planetTargetPosRef.current);
+    } else {
+      groupRef.current.position.lerp(planetTargetPosRef.current, smooth);
+    }
+
+    parentPositionAuRef.current.set(
+      groupRef.current.position.x / AU_SCALE,
+      groupRef.current.position.y / AU_SCALE,
+      groupRef.current.position.z / AU_SCALE,
+    );
 
     if (saturnRingRef.current) {
       saturnRingRef.current.rotation.z += 0.0003;
@@ -575,13 +617,36 @@ const PlanetBody = ({
       {name === 'Earth' && <EarthAtmosphericHalo radius={radius} />}
       {/* Auroral ovals — spherical polar coordinates, N+S hemispheres */}
       {/* Only rendered for magnetically active planets */}
-      {(name === 'Earth' || name === 'Jupiter' || name === 'Saturn') && (
-        <AuroraOval
-          radius={radius}
-          color={cmeOverdrive ? new THREE.Color('#ff4400') : primaryAuroraColor}
-          intensity={cmeOverdrive ? 1.8 : Math.max(0.3, currentIntensity)}
-          kpIndex={cmeOverdrive ? 8 : Math.min(9, currentIntensity * 3)}
-        />
+      {auroraEnabled !== false && (name === 'Earth' || name === 'Jupiter' || name === 'Saturn') && (
+        <SlateErrorBoundary
+          moduleName="AuroraOval"
+          fallback={
+            /* Safe MeshStandardMaterial ring fallback — renders if GLSL compile fails */
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[radius * 1.02, radius * 1.06, 96]} />
+              <meshStandardMaterial
+                color="#00ffaa"
+                transparent
+                opacity={0.18}
+                side={THREE.DoubleSide}
+                depthWrite={false}
+              />
+            </mesh>
+          }
+        >
+          <AuroraOval
+            radius={radius}
+            color={cmeOverdrive ? new THREE.Color('#ff4400') : primaryAuroraColor}
+            intensity={cmeOverdrive ? 1.8 : Math.max(0.3, currentIntensity)}
+            kpIndex={Math.max(0, Math.min(9, kpIndex !== undefined ? (cmeOverdrive ? 8 : kpIndex) : (cmeOverdrive ? 8 : Math.min(9, currentIntensity * 3))))}
+          />
+        </SlateErrorBoundary>
+      )}
+
+      {name === 'Earth' && (
+        <SlateErrorBoundary moduleName="KesslerThreatNet" fallback={null}>
+          <KesslerThreatNet earthRadius={radius} cascade={kesslerCascade} visible />
+        </SlateErrorBoundary>
       )}
 
       {name === 'Saturn' && (
@@ -623,6 +688,10 @@ export const PlanetRenderer = ({
   onPlanetRefsReady,
   epochYear,
   positionOverridesAu,
+  focusedPlanetName,
+  kpIndex,
+  kesslerCascade,
+  auroraEnabled,
 }: {
   onPlanetSelect: (name: string) => void;
   onFocusAnimationComplete?: () => void;
@@ -634,6 +703,14 @@ export const PlanetRenderer = ({
   onPlanetRefsReady?: (refs: Map<string, THREE.Group>) => void;
   epochYear?: number;
   positionOverridesAu?: Record<string, { x: number; y: number; z: number }>;
+  /** Real planetary Kp index — drives aurora color gradient and latitudinal spread. */
+  kpIndex?: number;
+  /** Latest cascade forecast from kesslerWorker (fallback: LSTM cascade). */
+  kesslerCascade?: KesslerCascadeForecast | null;
+  /** When set, the matching planet's 3D hover tooltip is suppressed (camera already focused on it). */
+  focusedPlanetName?: string | null;
+  /** Global aurora shader toggle (Eco Mode disables auroral rendering entirely). */
+  auroraEnabled?: boolean;
 }) => {
   const payload = planetData as PlanetFactsPayload;
   const facts = useMemo(() => new Map(payload.planets.map((planet) => [planet.name, planet])), [payload.planets]);
@@ -729,6 +806,10 @@ export const PlanetRenderer = ({
           registerRef={registerRef}
           epochYearRef={hasEpochOverride ? epochYearRef : undefined}
           positionOverridesAu={positionOverridesAu}
+          suppressTooltip={name === focusedPlanetName}
+          kpIndex={kpIndex}
+          kesslerCascade={kesslerCascade}
+          auroraEnabled={auroraEnabled}
         />
       ))}
     </>

@@ -19,6 +19,7 @@ type EarthWeatherNowProps = {
   longitude: number;
   locationName?: string;
   onCurrentChange?: (current: EarthWeatherCurrent | null) => void;
+  className?: string;
 };
 
 export default function EarthWeatherNow({
@@ -27,6 +28,7 @@ export default function EarthWeatherNow({
   longitude,
   locationName = 'Earth Surface',
   onCurrentChange,
+  className,
 }: EarthWeatherNowProps) {
   const [current, setCurrent] = useState<EarthWeatherCurrent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export default function EarthWeatherNow({
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-none absolute bottom-24 right-4 z-[75] min-w-[220px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm">
+    <div className={className ?? 'pointer-events-none absolute bottom-24 right-4 z-[75] min-w-[220px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm'}>
       <div className="text-[8px] uppercase tracking-[0.16em] text-cyan-400/80">Earth Live Weather</div>
       <div className="text-[10px] uppercase tracking-[0.1em] text-cyan-100">{locationName}</div>
       {current ? (

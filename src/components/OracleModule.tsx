@@ -24,7 +24,7 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
   const [prompt, setPrompt] = useState('');
   const [showExplain, setShowExplain] = useState(false);
   const [explainMode, setExplainMode] = useState<'global' | 'local'>('global');
-  const { provider, ready, loading, explaining, error, messages, explanation, ask, explain } = useNeuralOracle();
+  const { provider, ready, loading, anomalyLoading, explaining, error, messages, explanation, ask, explain } = useNeuralOracle();
 
   const chartRows = useMemo(
     () => (explanation?.weights ?? []).map((row) => ({
@@ -85,9 +85,21 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
           <h3 className="text-sm text-white uppercase tracking-wide">Live Hazard Interpreter</h3>
         </div>
         <div className="text-[8px] uppercase tracking-[0.12em] text-cyan-300/80">
-          {ready ? provider : 'initializing'}
+          {ready
+            ? provider === 'local-webgpu'
+              ? 'Local WebGPU · instant lane'
+              : provider === 'local-cpu'
+                ? 'Local CPU · instant lane'
+                : 'rules engine'
+            : 'initializing'}
         </div>
       </div>
+
+      {anomalyLoading && (
+        <div className="mb-2 rounded border border-amber-400/30 bg-black/40 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-amber-200/90">
+          Asynchronous cloud anomaly pass in progress...
+        </div>
+      )}
 
       <div className="mb-3 rounded border border-cyan-500/20 bg-black/45 p-2 text-[9px] uppercase tracking-[0.08em] text-cyan-200/90">
         Kp {snapshot.kpIndex.toFixed(1)} · Bz {snapshot.bzGsm.toFixed(1)} nT · Wind {Math.round(snapshot.solarWindSpeed)} km/s · {snapshot.flareClass}
@@ -242,9 +254,14 @@ export const OracleModule: FC<OracleModuleProps> = ({ snapshot, alerts = [], aur
               className={`rounded border px-2 py-1.5 text-[10px] ${
                 message.role === 'user'
                   ? 'border-cyan-500/30 bg-cyan-500/8 text-cyan-100'
-                  : 'border-amber-500/30 bg-black/55 text-amber-100'
+                  : message.lane === 'anomaly'
+                    ? 'border-fuchsia-400/35 bg-fuchsia-500/10 text-fuchsia-100'
+                    : 'border-amber-500/30 bg-black/55 text-amber-100'
               }`}
             >
+              {message.role === 'oracle' && message.lane === 'anomaly' && (
+                <div className="mb-1 text-[7px] uppercase tracking-[0.14em] text-fuchsia-300/85">HF anomaly analysis</div>
+              )}
               {message.text}
             </div>
           ))

@@ -52,6 +52,16 @@ VITE_OPENWEATHER_API_KEY=your_openweather_key
 VITE_MAPBOX_TOKEN=your_mapbox_token
 ```
 
+Create backend env file `.env.backend` from `.env.backend.example`:
+
+```dotenv
+HF_API_TOKEN=your_hugging_face_api_token
+HF_INFERENCE_MODEL=HuggingFaceH4/zephyr-7b-beta
+HF_INFERENCE_API_URL=https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta
+HF_PROXY_PORT=3000
+HF_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173
+```
+
 Notes:
 - NOAA SWPC endpoints used by the worker are public and do not require API keys.
 - DONKI calls now use `VITE_NASA_DONKI_API_KEY` (fallback: `DEMO_KEY`).
@@ -78,8 +88,11 @@ npm run build
 
 - Added `Neural Oracle` chat panel in the HUD (`Oracle` dock tile)
 - Oracle runs in `src/workers/oracleWorker.ts`
-	- Tries Transformers.js (`@xenova/transformers`) with WebGPU
-	- Falls back to deterministic rule-based hazard narration if model/backend unavailable
+	- Dual pipeline:
+		- Local lane (WebGPU-capable clients or CPU fallback) returns instant hazard alerts
+		- Asynchronous cloud lane calls backend proxy `http://localhost:3000/api/anomaly`
+		- Backend proxy forwards to Hugging Face Inference API using backend-only `HF_API_TOKEN`
+	- Cloud failures gracefully fall back to local anomaly heuristics
 - Added swappable telemetry contract in `src/services/hazardModel.ts`
 	- React UI consumes unified `HazardTelemetryModel`
 	- Makes it safe to swap NOAA JSON feeds with local inference engines without rewriting HUD components
@@ -101,9 +114,9 @@ npm run build
 
 1. Open `Oracle` from the left dock.
 2. Ask plain-English questions (e.g., "What is 24h hazard risk?").
-3. The panel responds using live KP/Bz/wind/flare + Kessler cascade context.
+3. The panel returns an instant local alert first, then appends cloud anomaly analysis asynchronously.
 
-If WebGPU model init is unavailable on the client, Oracle continues with fallback logic.
+If WebGPU runtime is unavailable, Oracle uses local CPU heuristics and keeps the cloud anomaly lane.
 
 ## Extending with Local WebGPU LLM
 

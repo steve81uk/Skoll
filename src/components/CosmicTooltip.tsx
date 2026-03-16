@@ -58,9 +58,22 @@ export function CosmicTooltip({ content, children }: CosmicTooltipProps) {
  * Returns onPointerOver + onPointerOut + onPointerMove handlers
  * that drive the global CosmicTooltip from inside any R3F component.
  */
-export function usePlanetTooltip(name: string) {
+const NOOP_HANDLERS = {
+  onPointerOver: (_e: PointerLike) => {},
+  onPointerMove: (_e: PointerLike) => {},
+  onPointerOut: () => {},
+} as const;
+
+/**
+ * Returns pointer-event handlers that drive the global CosmicTooltip.
+ * Pass `suppress = true` when the planet is already focused in the camera
+ * to avoid a redundant tooltip floating over the selected body.
+ */
+export function usePlanetTooltip(name: string, suppress = false) {
   const { showTooltip, hideTooltip, updatePosition } = useCosmicTooltip();
   const content = PLANET_TOOLTIPS[name] ?? GENERIC_BODY_TOOLTIP(name);
+
+  if (suppress) return NOOP_HANDLERS;
 
   return {
     onPointerOver: (e: PointerLike) => {

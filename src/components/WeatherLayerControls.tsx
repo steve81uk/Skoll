@@ -20,6 +20,7 @@ interface WeatherLayerControlsProps {
   visibility: WeatherLayerVisibility;
   onOpacityChange: (next: WeatherLayerOpacity) => void;
   onVisibilityChange: (next: WeatherLayerVisibility) => void;
+  className?: string;
 }
 
 export default function WeatherLayerControls({
@@ -28,6 +29,7 @@ export default function WeatherLayerControls({
   visibility,
   onOpacityChange,
   onVisibilityChange,
+  className,
 }: WeatherLayerControlsProps) {
   if (!visible) return null;
 
@@ -48,7 +50,7 @@ export default function WeatherLayerControls({
   ];
 
   return (
-    <div className="pointer-events-auto absolute bottom-24 left-4 z-[75] min-w-[260px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm">
+    <div className={className ?? 'pointer-events-auto absolute bottom-24 left-4 z-[75] min-w-[260px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm'}>
       <div className="text-[8px] uppercase tracking-[0.16em] text-cyan-400/80">Earth Weather Layers</div>
       <div className="mt-2 space-y-2">
         {rows.map((row) => (
