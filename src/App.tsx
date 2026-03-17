@@ -78,6 +78,7 @@ import { useSolarSonification } from './hooks/useSolarSonification';
 import { useKesslerWorker } from './hooks/useKesslerWorker';
 import { DEFAULT_RULES, evaluateAlerts, type TriggeredAlert } from './services/alertEngine';
 import { buildSnapshotUrl, captureCanvasScreenshot, decodeSnapshot, type SnapshotState } from './services/snapshotService';
+import { useDockSystem } from './hooks/useDockSystem';
 import { postAlertsToRelay } from './services/socialRelay';
 import eventsData from './ml/space_weather_events.json';
 
@@ -87,9 +88,6 @@ type BodyName = keyof typeof SYSTEM_CONSTANTS;
 type FXQuality = 'LOW' | 'HIGH';
 type DockTone = 'telemetry' | 'forecast' | 'sim';
 type DockStatus = 'green' | 'amber' | 'red';
-type DockSide = 'left' | 'right';
-type DockPanelAnchor = { insetBlockStart: number; insetInlineStart?: number; insetInlineEnd?: number };
-type CommandMenuAnchor = { insetBlockStart: number; insetInlineStart: number };
 type TimelineContextMenu = { x: number; y: number } | null;
 type EarthLodStage = 'SPACE' | 'ORBIT' | 'REGIONAL' | 'LOCAL';
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_LOGS === 'true';
@@ -370,7 +368,6 @@ export default function App() {
   const [cmeImpactActive, setCmeImpactActive] = useState(false);
   const [fxQuality, setFxQuality] = useState<FXQuality>('HIGH');
   const [impactBurstActive, setImpactBurstActive] = useState(false);
-  const [selectedTileId, setSelectedTileId] = useState<string>('mission-core');
   const [selectedEpochYear, setSelectedEpochYear] = useState<number>(2026);
   const [showISS, setShowISS] = useState(false);
   const [syntheticCME, setSyntheticCME] = useState<SyntheticCME | null>(null);
@@ -382,11 +379,6 @@ export default function App() {
   const carringtonDisplayRef = useRef(0);
   const [heliopauseVisible, setHeliopauseVisible] = useState(false);
   const [blackoutVisible, setBlackoutVisible] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [dockModalTileId, setDockModalTileId] = useState<string | null>(null);
-  const [dockModalSide, setDockModalSide] = useState<DockSide>('left');
-  const [dockPanelAnchor, setDockPanelAnchor] = useState<DockPanelAnchor | null>(null);
-  const [commandMenuAnchor, setCommandMenuAnchor] = useState<CommandMenuAnchor | null>(null);
   const [nowUtc, setNowUtc] = useState(() => new Date());
   const [controlBarHeight, setControlBarHeight] = useState(92);
   const [timeExplorerHeight, setTimeExplorerHeight] = useState(TIME_EXPLORER_BASE_HEIGHT);
@@ -420,7 +412,6 @@ export default function App() {
   const [adaptiveDpr, setAdaptiveDpr] = useState(1.2);
   const [retroMode, setRetroMode] = useState(false);
   const [relayEnabled, setRelayEnabled] = useState(false);
-  const [activeSubTileId, setActiveSubTileId] = useState<string>('mission-core');
   const [hudMinimized] = useState(false);
   const [trackedPlanetName, setTrackedPlanetName] = useState<string | null>(null);
   const [planetRefs, setPlanetRefs] = useState<Map<string, THREE.Group>>(new Map());
@@ -429,49 +420,10 @@ export default function App() {
   const envWarnedRef = useRef(false);
   const audioAtmosphereRef = useRef<AudioAtmosphere>(new AudioAtmosphere());
   const controlBarRef = useRef<HTMLDivElement | null>(null);
-  const dockPanelRef = useRef<HTMLDivElement | null>(null);
   const timeExplorerRef = useRef<HTMLDivElement | null>(null);
   const holdScrubRef = useRef<number | null>(null);
   const precisionFetchTicketRef = useRef(0);
 
-  const handleShareSnapshot = useCallback(async () => {
-    const snapshotEpoch = currentDate === 'LIVE' ? Date.now() : currentDate.getTime();
-    const snapshot: SnapshotState = {
-      epoch: snapshotEpoch,
-      cameraPosition: [0, 0, 0],
-      cameraTarget: [0, 0, 0],
-      openPanels: [activeSubTileId],
-      activeSimulation: cmeActive ? 'cme' : undefined,
-      zoomStage: earthLodStage,
-    };
-
-    const shareUrl = buildSnapshotUrl(snapshot);
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      const screenshot = await captureCanvasScreenshot();
-      setToasts((prev) => [
-        {
-          id: `snapshot-${Date.now()}`,
-          severity: 'info' as const,
-          message: screenshot ? 'Snapshot URL copied (+ screenshot captured locally)' : 'Snapshot URL copied to clipboard',
-          ts: Date.now(),
-          value: 1,
-        },
-        ...prev,
-      ].slice(0, 12));
-    } catch {
-      setToasts((prev) => [
-        {
-          id: `snapshot-fail-${Date.now()}`,
-          severity: 'warning' as const,
-          message: 'Snapshot copy failed. Clipboard permission required.',
-          ts: Date.now(),
-          value: 0,
-        },
-        ...prev,
-      ].slice(0, 12));
-    }
-  }, [activeSubTileId, cmeActive, currentDate, earthLodStage]);
 
   const requestNotificationPermission = useCallback(async () => {
     if (!('Notification' in window)) {
@@ -647,7 +599,6 @@ export default function App() {
     [],
   );
 
-  const selectedTileLabel = tileCatalog.find((tile) => tile.id === selectedTileId)?.label ?? 'Mission Core';
   const allToolIds = useMemo(() => tileCatalog.map((tile) => tile.id), [tileCatalog]);
 
   const menuGroups = useMemo<Record<string, string[]>>(
@@ -694,6 +645,48 @@ export default function App() {
     ],
     [],
   );
+
+  const dock = useDockSystem({ controlBarHeight, leftDockTiles, rightDockTiles, menuGroups, allToolIds });
+  const selectedTileLabel = tileCatalog.find((tile) => tile.id === dock.selectedTileId)?.label ?? 'Mission Core';
+
+  const handleShareSnapshot = useCallback(async () => {
+    const snapshotEpoch = currentDate === 'LIVE' ? Date.now() : currentDate.getTime();
+    const snapshot: SnapshotState = {
+      epoch: snapshotEpoch,
+      cameraPosition: [0, 0, 0],
+      cameraTarget: [0, 0, 0],
+      openPanels: [dock.activeSubTileId],
+      activeSimulation: cmeActive ? 'cme' : undefined,
+      zoomStage: earthLodStage,
+    };
+
+    const shareUrl = buildSnapshotUrl(snapshot);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      const screenshot = await captureCanvasScreenshot();
+      setToasts((prev) => [
+        {
+          id: `snapshot-${Date.now()}`,
+          severity: 'info' as const,
+          message: screenshot ? 'Snapshot URL copied (+ screenshot captured locally)' : 'Snapshot URL copied to clipboard',
+          ts: Date.now(),
+          value: 1,
+        },
+        ...prev,
+      ].slice(0, 12));
+    } catch {
+      setToasts((prev) => [
+        {
+          id: `snapshot-fail-${Date.now()}`,
+          severity: 'warning' as const,
+          message: 'Snapshot copy failed. Clipboard permission required.',
+          ts: Date.now(),
+          value: 0,
+        },
+        ...prev,
+      ].slice(0, 12));
+    }
+  }, [dock.activeSubTileId, cmeActive, currentDate, earthLodStage]);
 
   const toDockStatus = useCallback((level?: 'green' | 'amber' | 'red'): DockStatus => {
     if (level === 'red') return 'red';
@@ -754,98 +747,6 @@ export default function App() {
     amber: 'bg-amber-400',
     red: 'bg-red-400',
   };
-  const clampDockAnchor = useCallback((anchor: DockPanelAnchor, side: DockSide, barHeight: number): DockPanelAnchor => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const gutter = 8;
-    const panelWidth = Math.min(vw * 0.92, 640);
-    const panelHeight = Math.round(vh * 0.7);
-    const topGutter = barHeight + 8;
-    const maxTop = Math.max(topGutter, vh - panelHeight - gutter);
-    const clampedTop = Math.min(maxTop, Math.max(topGutter, anchor.insetBlockStart));
-
-    if (side === 'left') {
-      const rawLeft = anchor.insetInlineStart ?? (anchor.insetInlineEnd !== undefined ? vw - panelWidth - anchor.insetInlineEnd : gutter);
-      const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
-      return {
-        insetBlockStart: clampedTop,
-        insetInlineStart: Math.min(maxLeft, Math.max(gutter, rawLeft)),
-        insetInlineEnd: undefined,
-      };
-    }
-
-    const rawRight = anchor.insetInlineEnd ?? (anchor.insetInlineStart !== undefined ? vw - panelWidth - anchor.insetInlineStart : gutter);
-    const maxRight = Math.max(gutter, vw - panelWidth - gutter);
-    return {
-      insetBlockStart: clampedTop,
-      insetInlineStart: undefined,
-      insetInlineEnd: Math.min(maxRight, Math.max(gutter, rawRight)),
-    };
-  }, []);
-
-  const clampCommandMenuAnchor = useCallback((anchor: CommandMenuAnchor, barHeight: number): CommandMenuAnchor => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const gutter = 8;
-    const panelWidth = Math.min(vw * 0.92, 720);
-    const panelHeight = Math.round(vh * 0.7);
-    const topGutter = barHeight + 8;
-    const maxTop = Math.max(topGutter, vh - panelHeight - gutter);
-    const maxLeft = Math.max(gutter, vw - panelWidth - gutter);
-
-    return {
-      insetBlockStart: Math.min(maxTop, Math.max(topGutter, anchor.insetBlockStart)),
-      insetInlineStart: Math.min(maxLeft, Math.max(gutter, anchor.insetInlineStart)),
-    };
-  }, []);
-
-  useEffect(() => {
-    const keyHandler = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        setDockModalTileId(null);
-        setDockPanelAnchor(null);
-        setOpenMenuId(null);
-        setCommandMenuAnchor(null);
-        return;
-      }
-
-      const number = Number(event.key);
-      if (Number.isNaN(number) || number < 1 || number > 6) {
-        return;
-      }
-
-      if (event.shiftKey) {
-        const rightTile = rightDockTiles[number - 1];
-        if (!rightTile) return;
-        setSelectedTileId(rightTile.id);
-        setDockModalSide('right');
-        setDockPanelAnchor(clampDockAnchor({
-          insetBlockStart: controlBarHeight + 24,
-          insetInlineEnd: 56,
-        }, 'right', controlBarHeight));
-        setDockModalTileId((prev) => (prev === rightTile.id ? null : rightTile.id));
-        return;
-      }
-
-      const leftTile = leftDockTiles[number - 1];
-      if (!leftTile) return;
-      setSelectedTileId(leftTile.id);
-      setDockModalSide('left');
-      setDockPanelAnchor(clampDockAnchor({
-        insetBlockStart: controlBarHeight + 24,
-        insetInlineStart: 56,
-      }, 'left', controlBarHeight));
-      setDockModalTileId((prev) => (prev === leftTile.id ? null : leftTile.id));
-    };
-
-    window.addEventListener('keydown', keyHandler);
-    return () => window.removeEventListener('keydown', keyHandler);
-  }, [clampDockAnchor, controlBarHeight, leftDockTiles, rightDockTiles]);
 
   useEffect(() => {
     let frameCount = 0;
@@ -941,12 +842,14 @@ export default function App() {
         setCurrentDate(new Date(snap.epoch));
       }
       if (Array.isArray(snap.openPanels) && snap.openPanels.length > 0) {
-        setActiveSubTileId(snap.openPanels[0]);
-        setSelectedTileId(snap.openPanels[0]);
+        dock.setActiveSubTileId(snap.openPanels[0]);
+        dock.setSelectedTileId(snap.openPanels[0]);
       }
     } catch {
       // Ignore invalid snapshot payloads.
     }
+  // dock.set* are stable useState dispatchers; this effect is intentionally mount-only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1041,80 +944,6 @@ export default function App() {
     }
   }, [audioEnabled, cmeImpactActive, solarSonification]);
 
-  useEffect(() => {
-    if (!dockModalTileId) {
-      return;
-    }
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) {
-        return;
-      }
-
-      if (dockPanelRef.current?.contains(target)) {
-        return;
-      }
-
-      const element = event.target as HTMLElement | null;
-      if (element?.closest('.skoll-dock-button')) {
-        return;
-      }
-
-      setDockModalTileId(null);
-      setDockPanelAnchor(null);
-    };
-
-    window.addEventListener('mousedown', handleOutsideClick);
-    return () => window.removeEventListener('mousedown', handleOutsideClick);
-  }, [dockModalTileId]);
-
-  useEffect(() => {
-    if (!dockModalTileId || !dockPanelAnchor) {
-      return;
-    }
-
-    const clampOnResize = () => {
-      setDockPanelAnchor((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        const next = clampDockAnchor(prev, dockModalSide, controlBarHeight);
-        const changed =
-          Math.abs(next.insetBlockStart - prev.insetBlockStart) > 2
-          || Math.abs((next.insetInlineStart ?? 0) - (prev.insetInlineStart ?? 0)) > 2
-          || Math.abs((next.insetInlineEnd ?? 0) - (prev.insetInlineEnd ?? 0)) > 2;
-        return changed ? next : prev;
-      });
-    };
-
-    window.addEventListener('resize', clampOnResize);
-    return () => {
-      window.removeEventListener('resize', clampOnResize);
-    };
-  }, [clampDockAnchor, controlBarHeight, dockModalSide, dockModalTileId, dockPanelAnchor]);
-
-  useEffect(() => {
-    if (!openMenuId || !commandMenuAnchor) {
-      return;
-    }
-
-    const clampOnResize = () => {
-      setCommandMenuAnchor((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        const next = clampCommandMenuAnchor(prev, controlBarHeight);
-        const changed = Math.abs(next.insetBlockStart - prev.insetBlockStart) > 2 || Math.abs(next.insetInlineStart - prev.insetInlineStart) > 2;
-        return changed ? next : prev;
-      });
-    };
-
-    window.addEventListener('resize', clampOnResize);
-    return () => {
-      window.removeEventListener('resize', clampOnResize);
-    };
-  }, [clampCommandMenuAnchor, commandMenuAnchor, controlBarHeight, openMenuId]);
 
   const renderSubmenuContent = (tileId: string) => {
     switch (tileId) {
@@ -1686,15 +1515,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!openMenuId) {
-      return;
-    }
-    const groupIds = menuGroups[openMenuId] ?? [];
-    if (groupIds.length > 0 && !groupIds.includes(activeSubTileId)) {
-      setActiveSubTileId(groupIds[0]);
-    }
-  }, [activeSubTileId, menuGroups, openMenuId]);
 
   useEffect(() => {
     const keyHandler = (event: KeyboardEvent) => {
@@ -1706,8 +1526,7 @@ export default function App() {
         setViewMode('HELIOCENTRIC');
         setCurrentPlanet(null);
         setShowDiagnostics(false);
-        setOpenMenuId(null);
-        setCommandMenuAnchor(null);
+        dock.closeCommandPalette();
         setTimelineContextMenu(null);
       }
 
@@ -1736,7 +1555,9 @@ export default function App() {
 
     window.addEventListener('keydown', keyHandler);
     return () => window.removeEventListener('keydown', keyHandler);
-  }, [currentPlanet, openMenuId, trackedPlanetName]);
+  // dock.closeCommandPalette is a stable useCallback; no need to list dock itself.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPlanet, trackedPlanetName]);
 
   // Carrington sim clock — update panel stats in real-time
   useEffect(() => {
@@ -2191,19 +2012,7 @@ export default function App() {
               type="button"
               className="aurora-command-pill aurora-command-action min-w-0 text-left"
               onClick={() => {
-                setOpenMenuId((prev) => {
-                  const next = prev === 'live-telemetry' ? null : 'live-telemetry';
-                  if (next === null) {
-                    setCommandMenuAnchor(null);
-                  } else {
-                    setCommandMenuAnchor(clampCommandMenuAnchor({ insetBlockStart: controlBarHeight + 8, insetInlineStart: 12 }, controlBarHeight));
-                    const groupIds = menuGroups['live-telemetry'] ?? [];
-                    if (groupIds.length > 0) {
-                      setActiveSubTileId(groupIds[0]);
-                    }
-                  }
-                  return next;
-                });
+                dock.toggleCommandGroup('live-telemetry', { insetBlockStart: controlBarHeight + 8, insetInlineStart: 12 });
               }}
             >
               <span className="leading-tight text-[8px] uppercase tracking-[0.12em] text-cyan-400/90">Mission Control</span>
@@ -2363,10 +2172,10 @@ export default function App() {
             {!hudMinimized && (
               <>
                 {/* Backdrop — closes modal when clicking outside */}
-                {dockModalTileId && (
+                {dock.dockModalTileId && (
                   <div
                     className="fixed inset-0 z-[49] bg-black/10 pointer-events-auto"
-                    onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }}
+                    onClick={() => dock.closeDockPanel()}
                   />
                 )}
 
@@ -2378,12 +2187,8 @@ export default function App() {
                     >
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedTileId(item.id);
-                          setDockModalSide('left');
-                          setDockModalTileId((prev) => (prev === item.id ? null : item.id));
-                        }}
-                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
+                        onClick={() => dock.openDockPanel(item.id, 'left')}
+                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dock.dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
                       >
                         <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
                         {item.icon}
@@ -2394,12 +2199,7 @@ export default function App() {
                     type="button"
                     onClick={(event) => {
                       const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                      setOpenMenuId('all-tools');
-                      setCommandMenuAnchor(clampCommandMenuAnchor({
-                        insetBlockStart: rect.top - 12,
-                        insetInlineStart: rect.right + 12,
-                      }, controlBarHeight));
-                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                      dock.openCommandPalette({ insetBlockStart: rect.top - 12, insetInlineStart: rect.right + 12 });
                     }}
                     className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
                     title="More tools"
@@ -2409,9 +2209,9 @@ export default function App() {
                   </button>
 
                   {/* Left dock modal — opens to the right of the icon column */}
-                  {dockModalSide === 'left' && dockModalTileId && (
+                  {dock.dockModalSide === 'left' && dock.dockModalTileId && (
                     <motion.div
-                      ref={dockPanelRef}
+                      ref={dock.dockPanelRef}
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -12 }}
@@ -2420,12 +2220,12 @@ export default function App() {
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                          {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
+                          {tileCatalog.find((tile) => tile.id === dock.dockModalTileId)?.label ?? dock.dockModalTileId}
                         </div>
-                        <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
+                        <button type="button" onClick={() => dock.closeDockPanel()} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
                       </div>
                       <div className="max-h-[76vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1.5 text-[11px]">
-                        {renderSubmenuContent(dockModalTileId)}
+                        {renderSubmenuContent(dock.dockModalTileId)}
                       </div>
                     </motion.div>
                   )}
@@ -2439,12 +2239,8 @@ export default function App() {
                     >
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedTileId(item.id);
-                          setDockModalSide('right');
-                          setDockModalTileId((prev) => (prev === item.id ? null : item.id));
-                        }}
-                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
+                        onClick={() => dock.openDockPanel(item.id, 'right')}
+                        className={`skoll-dock-button relative h-9 w-9 rounded-lg border text-[12px] font-bold transition-colors ${dock.dockModalTileId === item.id ? `${dockToneClasses[item.tone].active} shadow-[0_0_10px_rgba(34,211,238,0.35)]` : dockToneClasses[item.tone].idle}`}
                       >
                         <span className={`absolute left-1 top-1 h-1.5 w-1.5 rounded-full ${dockStatusClass[getDockStatus(item.id)]}`} />
                         {item.icon}
@@ -2455,12 +2251,7 @@ export default function App() {
                     type="button"
                     onClick={(event) => {
                       const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                      setOpenMenuId('all-tools');
-                      setCommandMenuAnchor(clampCommandMenuAnchor({
-                        insetBlockStart: rect.top - 12,
-                        insetInlineStart: rect.left - 360,
-                      }, controlBarHeight));
-                      setActiveSubTileId(allToolIds[0] ?? 'mission-core');
+                      dock.openCommandPalette({ insetBlockStart: rect.top - 12, insetInlineStart: rect.left - 360 });
                     }}
                     className="skoll-dock-button mt-auto relative h-9 w-9 rounded-lg border border-cyan-500/35 bg-black/55 text-[12px] font-bold text-cyan-300 transition-colors hover:bg-cyan-500/12"
                     title="More tools"
@@ -2470,9 +2261,9 @@ export default function App() {
                   </button>
 
                   {/* Right dock modal — absolute, opens to the left of the icon column */}
-                  {dockModalSide === 'right' && dockModalTileId && (
+                  {dock.dockModalSide === 'right' && dock.dockModalTileId && (
                     <motion.div
-                      ref={dockPanelRef}
+                      ref={dock.dockPanelRef}
                       initial={{ opacity: 0, x: 12 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 12 }}
@@ -2481,24 +2272,24 @@ export default function App() {
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                          {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
+                          {tileCatalog.find((tile) => tile.id === dock.dockModalTileId)?.label ?? dock.dockModalTileId}
                         </div>
-                        <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
+                        <button type="button" onClick={() => dock.closeDockPanel()} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
                       </div>
                       <div className="max-h-[76vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1.5 text-[11px]">
-                        {renderSubmenuContent(dockModalTileId)}
+                        {renderSubmenuContent(dock.dockModalTileId)}
                       </div>
                     </motion.div>
                   )}
                 </div>
 
               {/* Floating command palette — "Open Live Tools" / "More tools" / keyboard shortcuts */}
-              {openMenuId && commandMenuAnchor && (
+              {dock.openMenuId && dock.commandMenuAnchor && (
                 <>
                   {/* Backdrop — click outside closes the palette */}
                   <div
                     className="fixed inset-0 z-[9997] pointer-events-auto"
-                    onClick={() => { setOpenMenuId(null); setCommandMenuAnchor(null); }}
+                    onClick={() => dock.closeCommandPalette()}
                   />
                   <motion.div
                   initial={{ opacity: 0, y: -8 }}
@@ -2507,8 +2298,8 @@ export default function App() {
                   transition={{ duration: 0.16, ease: 'easeOut' }}
                   className="nasa-slate skoll-slate-shell skoll-floating-popover fixed z-[9998] pointer-events-auto flex shadow-2xl"
                   style={{
-                    insetBlockStart: commandMenuAnchor.insetBlockStart,
-                    insetInlineStart: commandMenuAnchor.insetInlineStart,
+                    insetBlockStart: dock.commandMenuAnchor.insetBlockStart,
+                    insetInlineStart: dock.commandMenuAnchor.insetInlineStart,
                     width: 'min(96vw, 60rem)',
                     maxHeight: '78vh',
                   }}
@@ -2519,22 +2310,22 @@ export default function App() {
                       <span className="text-[8px] uppercase tracking-[0.2em] text-cyan-400/70">Tools</span>
                       <button
                         type="button"
-                        onClick={() => { setOpenMenuId(null); setCommandMenuAnchor(null); }}
+                        onClick={() => dock.closeCommandPalette()}
                         className="skoll-circle-action skoll-circle-action-danger text-[10px]"
                         aria-label="Close tool palette"
                       >
                         ✕
                       </button>
                     </div>
-                    {(menuGroups[openMenuId] ?? []).map((tileId) => {
+                    {(menuGroups[dock.openMenuId] ?? []).map((tileId) => {
                       const tile = tileCatalog.find((t) => t.id === tileId);
                       if (!tile) return null;
                       return (
                         <button
                           key={tileId}
                           type="button"
-                          onClick={() => setActiveSubTileId(tileId)}
-                          className={`text-left px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${activeSubTileId === tileId ? 'bg-cyan-500/20 text-cyan-100 border-l-2 border-cyan-400' : 'text-cyan-400/70 hover:bg-cyan-500/10 hover:text-cyan-200 border-l-2 border-transparent'}`}
+                          onClick={() => dock.setActiveSubTileId(tileId)}
+                          className={`text-left px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${dock.activeSubTileId === tileId ? 'bg-cyan-500/20 text-cyan-100 border-l-2 border-cyan-400' : 'text-cyan-400/70 hover:bg-cyan-500/10 hover:text-cyan-200 border-l-2 border-transparent'}`}
                         >
                           {tile.label}
                         </button>
@@ -2545,11 +2336,11 @@ export default function App() {
                   <div className="flex-1 min-w-0 flex flex-col">
                     <div className="px-3 py-2 border-b border-cyan-500/20 flex items-center justify-between">
                       <span className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
-                        {tileCatalog.find((t) => t.id === activeSubTileId)?.label ?? activeSubTileId}
+                        {tileCatalog.find((t) => t.id === dock.activeSubTileId)?.label ?? dock.activeSubTileId}
                       </span>
                     </div>
                     <div className="flex-1 overflow-y-auto overflow-x-hidden wolf-scroll p-3 text-[11px]">
-                      {renderSubmenuContent(activeSubTileId)}
+                      {renderSubmenuContent(dock.activeSubTileId)}
                     </div>
                   </div>
                 </motion.div>

@@ -87,6 +87,14 @@ npm run test:run
 
 ## Implemented Features (March 2026)
 
+Testing & Architecture
+Test suite (npm run test:run) covers the three most critical logic paths:
+
+Alert engine — storm severity tiers (G1 warning, G3+ critical) and cooldown deduplication (src/services/alertEngine.test.ts)
+Space weather schemas — NOAA payload drift guards (src/workers/noaaSchemas.test.ts)
+Forecast math — Kessler cascade risk model and CME arrival physics (src/ml/forecastMath.test.ts)
+Dock architecture — all panel open/close state, keyboard shortcuts (keys 1–6), and command palette logic live in src/hooks/useDockSystem.ts. App.tsx calls const dock = useDockSystem(...) and reads via dock. namespace.
+
 ### 3D Scene Layer Stack
 
 | Layer | Component | Notes |
