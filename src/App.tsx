@@ -356,6 +356,7 @@ const SurfaceCameraController = ({
 
 export default function App() {
   const [booted, setBooted] = useState(false);
+  const [fxReady, setFxReady] = useState(false);
   const [texturesLoaded, setTexturesLoaded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('HELIOCENTRIC');
   const [currentPlanet, setCurrentPlanet] = useState<BodyName | null>(null);
@@ -588,6 +589,15 @@ export default function App() {
       }, 3000);
       return () => clearTimeout(failsafeTimer);
     }
+  }, [booted]);
+
+  // Defer PostFX mount until after the renderer has had a few frames to settle.
+  // Without this, LazyCinematicPostFX attaches before the GL pipeline is ready,
+  // causing a flicker that toggling lite-mode temporarily resolves.
+  useEffect(() => {
+    if (!booted) return;
+    const t = setTimeout(() => setFxReady(true), 600);
+    return () => clearTimeout(t);
   }, [booted]);
 
   const tileCatalog = useMemo(
@@ -2149,7 +2159,7 @@ export default function App() {
               onAltitudeChange={setSurfaceAltitudeKm}
               sampleTerrainHeight={(x, z) => terrainSamplerRef.current(x, z)}
             />
-            {!liteMode && !ecoMode && (
+            {fxReady && !liteMode && !ecoMode && (
               <Suspense fallback={null}>
                 <LazyCinematicPostFX
                   quality={fxQuality}
