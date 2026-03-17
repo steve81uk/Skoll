@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { kpAriaLabel, bzAriaLabel, solarWindAriaLabel } from '../lib/a11y';
+import { PanelDescription } from './PanelDescription';
 
 /* ── Types ─────────────────────────────────────────────── */
 interface TelemetryData {
@@ -117,6 +118,17 @@ const PanelMode: FC<Omit<TelemetryRibbonProps, 'mode'>> = ({
 
   return (
     <div className="rounded-md border border-cyan-500/20 bg-black/40 p-2">
+      <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-cyan-500/15">
+        <span className="text-[8px] uppercase tracking-[0.18em] font-mono text-cyan-400/70">Live Telemetry</span>
+        <PanelDescription
+          id="telemetry-ribbon"
+          title="Live Telemetry"
+          summary="Real-time mission telemetry: elapsed mission time, geomagnetic Kp index, fireball flux, and aurora visibility for your observer location."
+          axes="MET: mission elapsed time (HH:MM:SS). Kp Index: 0–9 geomagnetic storm scale — 0 is quiet, 9 is extreme storm. Radiation Dose (planet mode): daily dose in millisieverts at the selected planet's orbit. Aurora: shows whether the northern/southern lights are currently visible from your location."
+          whyItMatters="The Kp index directly controls aurora visibility, satellite drag rates, GPS accuracy, and HF radio reliability. This strip gives a continuous heads-up on current space weather impact."
+          size="xs"
+        />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9px] uppercase tracking-[0.12em] font-mono">
         <Pill label="MET" value={formatMET(data.metSeconds ?? 0)} />
         <Pill label="KP IDX" value={kp.toFixed(1)} color={kpColor(kp)} pulse={isKpAlert} ariaLabel={kpAriaLabel(kp)} />

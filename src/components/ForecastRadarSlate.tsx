@@ -10,6 +10,7 @@ import type { FC } from 'react';
 import { calculateExoTelemetry, SYSTEM_CONSTANTS } from '../ml/ExoPhysics';
 import { CosmicTooltip } from './CosmicTooltip';
 import type { TooltipContent } from '../context/TooltipContext';
+import { PanelDescription } from './PanelDescription';
 
 // ─── CosmicTooltip content for each readout cell ──────────────────────────────
 const RADAR_COSMIC: Record<string, TooltipContent> = {
@@ -214,6 +215,14 @@ export const ForecastRadarSlate: FC<ForecastRadarProps> = ({
           <span className="text-xs uppercase tracking-[0.22em] text-cyan-400/90 font-mono">
             {planetName && !isEarth ? planetName : 'Earth'} — ML Radar
           </span>
+          <PanelDescription
+            id="forecast-radar"
+            title="ML Forecast Radar"
+            summary="Multi-factor space weather threat radar combining solar wind, geomagnetic Kp, CME arrival probability, and X-ray flux into a single threat score for the selected planet."
+            axes="Radar axes (spokes): each spoke represents a different space-weather parameter. The coloured polygon shows current threat levels — the further from centre, the higher the risk on that axis. Overall threat level is shown top-right."
+            whyItMatters="This radar gives a rapid, at-a-glance picture of combined space weather threat. Individual metrics can look benign, but multiple elevated parameters simultaneously dramatically increase risk to satellites, power grids, and communications."
+            size="xs"
+          />
         </div>
         <span className={`text-xs uppercase tracking-[0.2em] font-mono font-bold ${threatLabelColor}`}>
           {threatLabel}

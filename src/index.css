@@ -637,6 +637,16 @@ canvas {
   color: rgba(220, 255, 242, 0.9);
 }
 
+.skoll-circle-action svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
 .skoll-circle-action-danger:hover {
   background: rgba(255, 51, 102, 0.15);
   border-color: rgba(255, 51, 102, 0.4);
@@ -667,6 +677,17 @@ canvas {
   opacity: 0.98;
   stroke: currentColor;
   stroke-width: 2.15;
+}
+
+/* Side docks use the same rule without the top-bar scope */
+.skoll-dock-button svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 2;
+  pointer-events: none;
 }
 
 .app-top-bar .aurora-command-pill {
@@ -710,6 +731,13 @@ canvas {
 
 .skoll-floating-popover {
   position: fixed;
+  contain: layout paint;
+  transform: translateZ(0);
+}
+
+/* Used for dock-side panels that must be position:absolute relative to their column */
+.skoll-dock-popover {
+  position: absolute;
   contain: layout paint;
   transform: translateZ(0);
 }
@@ -1027,8 +1055,8 @@ textarea::placeholder {
   font-style: italic;
 }
 
-/* Buttons - Universal theming */
-button:not(.no-theme),
+/* Buttons - Universal theming — excluded: UI chrome buttons that manage their own styles */
+button:not(.no-theme):not(.skoll-dock-button):not(.skoll-circle-action):not(.aurora-command-action):not(.aurora-command-pill):not(.timeline-status-link):not(.timeline-mini-link):not([class*="skoll-"]),
 .themed-button {
   background: linear-gradient(
     135deg,
@@ -1050,7 +1078,7 @@ button:not(.no-theme),
   overflow: hidden;
 }
 
-button:not(.no-theme):hover,
+button:not(.no-theme):not(.skoll-dock-button):not(.skoll-circle-action):not(.aurora-command-action):not(.aurora-command-pill):not(.timeline-status-link):not(.timeline-mini-link):not([class*="skoll-"]):hover,
 .themed-button:hover {
   background: linear-gradient(
     135deg,
@@ -1065,7 +1093,7 @@ button:not(.no-theme):hover,
   transform: translateY(-2px);
 }
 
-button:not(.no-theme):active,
+button:not(.no-theme):not(.skoll-dock-button):not(.skoll-circle-action):not(.aurora-command-action):not(.aurora-command-pill):not(.timeline-status-link):not(.timeline-mini-link):not([class*="skoll-"]):active,
 .themed-button:active {
   transform: translateY(0);
   box-shadow: 

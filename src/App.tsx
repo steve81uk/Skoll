@@ -1,9 +1,9 @@
-﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { motion } from 'framer-motion';
-import { Orbit, Volume2, VolumeX, Bell, Share2, Zap, Gamepad2, Radio, Leaf, Lock, Unlock, Activity } from 'lucide-react';
+import { Orbit, Volume2, VolumeX, Bell, Share2, Zap, Gamepad2, Radio, Leaf, Lock, Unlock, Activity, Shield, Rocket, Flame, Satellite, Rss, TrendingUp, FlaskConical, BarChart2, Globe, Layers } from 'lucide-react';
 import * as THREE from 'three';
 import { useCameraFocus } from './hooks/useCameraFocus';
 import { CosmicTooltip } from './components/CosmicTooltip';
@@ -108,6 +108,7 @@ const DOCK_TILE_TOOLTIPS: Record<string, TooltipContent> = {
   'magnetic-grid':   { title: 'Magnetic Grid',        emoji: '⋈', accentColor: '#06b6d4', tagline: 'WMM-2025 Field Lines',  description: 'Global magnetic field line visualisation from World Magnetic Model 2025.' },
   'data-alchemist':  { title: 'Data Alchemist',       emoji: '⚗', accentColor: '#8b5cf6', tagline: 'Fusion Dashboard',      description: 'Multi-source data fusion with derived Wolf Formula hazard metrics.' },
   'graph-hub':       { title: 'Graph Mission Hub',    emoji: '▦', accentColor: '#8b5cf6', tagline: 'All Charts',            description: 'All real-time data charts scrollable in a single command view.' },
+  'dsn-live':        { title: 'DSN Live',             emoji: '📡', accentColor: '#06b6d4', tagline: 'Deep Space Network',     description: 'NASA Deep Space Network live dish activity, current uplinks and downlinks.' },
 };
 const TIME_EXPLORER_BASE_HEIGHT = 16;
 const BACKEND_HTTP_BASE = (import.meta.env.VITE_BACKEND_HTTP_BASE ?? import.meta.env.VITE_EPHEMERIS_API_BASE ?? 'http://localhost:8080').replace(/\/$/, '');
@@ -660,26 +661,26 @@ export default function App() {
     [allToolIds],
   );
 
-  const leftDockTiles = useMemo<Array<{ id: string; label: string; icon: string; tone: DockTone }>>(
+  const leftDockTiles = useMemo<Array<{ id: string; label: string; icon: ReactNode; tone: DockTone }>>(
     () => [
-      { id: 'telemetry', label: 'Telemetry', icon: '◉', tone: 'telemetry' },
-      { id: 'mission-core', label: 'Mission', icon: '⌁', tone: 'telemetry' },
-      { id: 'sat-threat', label: 'Threat', icon: '⚠', tone: 'sim' },
-      { id: 'hangar', label: 'Hangar', icon: '⬢', tone: 'sim' },
-      { id: 'fireball', label: 'Fireball', icon: '☄', tone: 'sim' },
+      { id: 'telemetry', label: 'Telemetry', icon: <Activity size={14} />, tone: 'telemetry' },
+      { id: 'mission-core', label: 'Mission', icon: <Layers size={14} />, tone: 'telemetry' },
+      { id: 'sat-threat', label: 'Threat', icon: <Shield size={14} />, tone: 'sim' },
+      { id: 'hangar', label: 'Hangar', icon: <Rocket size={14} />, tone: 'sim' },
+      { id: 'fireball', label: 'Fireball', icon: <Flame size={14} />, tone: 'sim' },
     ],
     [],
   );
 
-  const rightDockTiles = useMemo<Array<{ id: string; label: string; icon: string; tone: DockTone }>>(
+  const rightDockTiles = useMemo<Array<{ id: string; label: string; icon: ReactNode; tone: DockTone }>>(
     () => [
-      { id: 'forecast-radar', label: 'Radar', icon: '◎', tone: 'forecast' },
-      { id: 'dsn-live', label: 'DSN', icon: '⌬', tone: 'telemetry' },
-      { id: 'noaa-feed', label: 'NOAA', icon: '⌬', tone: 'telemetry' },
-      { id: 'lstm-forecast', label: 'LSTM', icon: '∿', tone: 'forecast' },
-      { id: 'magnetic-grid', label: 'Mag Grid', icon: '⋈', tone: 'telemetry' },
-      { id: 'data-alchemist', label: 'Alchemy', icon: '⚗', tone: 'forecast' },
-      { id: 'graph-hub', label: 'Graphs', icon: '▦', tone: 'forecast' },
+      { id: 'forecast-radar', label: 'Radar', icon: <Globe size={14} />, tone: 'forecast' },
+      { id: 'dsn-live', label: 'DSN', icon: <Satellite size={14} />, tone: 'telemetry' },
+      { id: 'noaa-feed', label: 'NOAA', icon: <Rss size={14} />, tone: 'telemetry' },
+      { id: 'lstm-forecast', label: 'LSTM', icon: <TrendingUp size={14} />, tone: 'forecast' },
+      { id: 'magnetic-grid', label: 'Mag Grid', icon: <Radio size={14} />, tone: 'telemetry' },
+      { id: 'data-alchemist', label: 'Alchemy', icon: <FlaskConical size={14} />, tone: 'forecast' },
+      { id: 'graph-hub', label: 'Graphs', icon: <BarChart2 size={14} />, tone: 'forecast' },
     ],
     [],
   );
@@ -883,8 +884,24 @@ export default function App() {
   }, [booted]);
 
   useEffect(() => {
-    setTimeExplorerHeight(TIME_EXPLORER_BASE_HEIGHT);
-  }, []);
+    const node = timeExplorerRef.current;
+    if (!node) {
+      setTimeExplorerHeight(TIME_EXPLORER_BASE_HEIGHT);
+      return;
+    }
+    const update = () => {
+      const next = Math.max(TIME_EXPLORER_BASE_HEIGHT, Math.ceil(node.getBoundingClientRect().height));
+      setTimeExplorerHeight((prev) => (prev !== next ? next : prev));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [booted]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--time-explorer-height', `${timeExplorerHeight}px`);
@@ -1671,6 +1688,10 @@ export default function App() {
 
   useEffect(() => {
     const keyHandler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
       if (event.key === 'Escape') {
         setViewMode('HELIOCENTRIC');
         setCurrentPlanet(null);
@@ -2178,29 +2199,22 @@ export default function App() {
               <span className="leading-tight text-[8px] uppercase tracking-[0.12em] text-cyan-400/90">Mission Control</span>
               <span className="ml-1 leading-tight text-[9px] uppercase tracking-[0.08em] text-cyan-100/95 truncate">/ open live tools</span>
             </button>
-            <div className="aurora-command-pill text-[9px] uppercase tracking-[0.16em] text-cyan-100 flex items-center gap-4">
-              <MissionUTCTime />
-              <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
-              <LocationSwitcher value={location} onChange={setLocation} />
-              <span
-                className={`rounded border px-1.5 py-0.5 text-[8px] tracking-[0.14em] ${trackedPlanetName ? 'border-emerald-400/45 bg-emerald-500/15 text-emerald-100' : 'border-cyan-500/35 bg-black/25 text-cyan-300/90'}`}
-                title={trackedPlanetName ? 'Camera tracking locked to selected body' : 'Camera is in free-fly mode'}
-              >
-                {trackedPlanetName ? `Track ${trackedPlanetName}` : 'Free Cam'}
-              </span>
-              <button
-                type="button"
-                className={`h-6 rounded border px-2 text-[8px] uppercase tracking-[0.12em] ${trackedPlanetName ? 'border-amber-400/45 bg-amber-500/15 text-amber-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
-                onClick={trackedPlanetName ? handleUnlockCamera : handleRelockCamera}
-                title={trackedPlanetName ? 'Unlock camera follow (U)' : `Re-lock follow to ${currentPlanet ?? 'Earth'} (F)`}
-                aria-label={trackedPlanetName ? 'Unlock camera follow' : 'Re-lock camera follow'}
-              >
-                {trackedPlanetName
-                  ? <><Unlock size={10} className="inline mr-0.5" />Unlock</>
-                  : <><Lock size={10} className="inline mr-0.5" />Re-lock</>}
-              </button>
+            <div className="aurora-command-pill min-w-0 flex flex-col gap-1">
+              <div className="flex items-center gap-3 text-[9px] uppercase tracking-[0.14em] text-cyan-100">
+                <MissionUTCTime />
+                <LiveSyncBadgeCompact lastFetch={noaaDonki.lastFetch} isLiveMode={currentDate === 'LIVE'} />
+              </div>
+              <div className="flex items-center gap-2">
+                <LocationSwitcher value={location} onChange={setLocation} />
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-[8px] tracking-[0.14em] shrink-0 ${trackedPlanetName ? 'border-emerald-400/45 bg-emerald-500/15 text-emerald-100' : 'border-cyan-500/35 bg-black/25 text-cyan-300/90'}`}
+                  title={trackedPlanetName ? 'Camera tracking locked to selected body' : 'Camera is in free-fly mode'}
+                >
+                  {trackedPlanetName ? `Track ${trackedPlanetName}` : 'Free Cam'}
+                </span>
+              </div>
             </div>
-            <div className="aurora-command-pill min-w-0 flex items-center gap-2 justify-start md:justify-end">
+            <div className="aurora-command-pill min-w-0 flex items-center gap-2 flex-wrap justify-start md:justify-end">
               <CosmicTooltip content={{ title: audioEnabled ? 'Mute Sonification' : 'Enable Sonification', emoji: '🔊', accentColor: '#06b6d4', description: 'Toggle real-time space-weather audio sonification.' }}>
                 <button
                   type="button"
@@ -2295,6 +2309,16 @@ export default function App() {
                   <Radio size={13} />
                 </button>
               </CosmicTooltip>
+              <CosmicTooltip content={{ title: trackedPlanetName ? 'Unlock Camera Follow' : 'Re-lock Camera Follow', emoji: '🎯', accentColor: trackedPlanetName ? '#f59e0b' : '#06b6d4', description: trackedPlanetName ? 'Return to free-fly mode (U)' : `Re-lock camera to ${currentPlanet ?? 'Earth'} (F)` }}>
+                <button
+                  type="button"
+                  className={`skoll-dock-button h-7 w-7 rounded border flex items-center justify-center ${trackedPlanetName ? 'border-amber-400/45 bg-amber-500/15 text-amber-100' : 'border-cyan-500/35 bg-black/20 text-cyan-300/90'}`}
+                  onClick={trackedPlanetName ? handleUnlockCamera : handleRelockCamera}
+                  aria-label={trackedPlanetName ? 'Unlock camera follow' : 'Re-lock camera follow'}
+                >
+                  {trackedPlanetName ? <Unlock size={13} /> : <Lock size={13} />}
+                </button>
+              </CosmicTooltip>
               <div className="h-6 w-6 rounded-md border border-cyan-400/45 flex items-center justify-center text-cyan-200 bg-cyan-500/5">
                 <Orbit size={13} />
               </div>
@@ -2340,7 +2364,7 @@ export default function App() {
                   {leftDockTiles.map((item) => (
                     <CosmicTooltip
                       key={item.id}
-                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: item.icon, accentColor: '#06b6d4' }}
+                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: '•', accentColor: '#06b6d4' }}
                     >
                       <button
                         type="button"
@@ -2373,13 +2397,35 @@ export default function App() {
                   >
                     <Activity size={14} />
                   </button>
+
+                  {/* Left dock modal — opens to the right of the icon column */}
+                  {dockModalSide === 'left' && dockModalTileId && (
+                    <motion.div
+                      ref={dockPanelRef}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -12 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="nasa-slate skoll-slate-shell skoll-dock-popover absolute left-full ml-2 top-0 z-50 w-[min(94vw,30rem)] max-w-[30rem] p-3.5 pointer-events-auto"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
+                        <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
+                          {tileCatalog.find((tile) => tile.id === dockModalTileId)?.label ?? dockModalTileId}
+                        </div>
+                        <button type="button" onClick={() => { setDockModalTileId(null); setDockPanelAnchor(null); }} className="skoll-circle-action skoll-circle-action-danger" aria-label="Close panel" title="Close">✕</button>
+                      </div>
+                      <div className="max-h-[76vh] overflow-y-auto overflow-x-hidden wolf-scroll pr-1.5 text-[11px]">
+                        {renderSubmenuContent(dockModalTileId)}
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2 pointer-events-auto overflow-visible">
                   {rightDockTiles.map((item) => (
                     <CosmicTooltip
                       key={item.id}
-                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: item.icon, accentColor: '#8b5cf6' }}
+                      content={DOCK_TILE_TOOLTIPS[item.id] ?? { title: item.label, emoji: '•', accentColor: '#8b5cf6' }}
                     >
                       <button
                         type="button"
@@ -2421,7 +2467,7 @@ export default function App() {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 12 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="nasa-slate skoll-slate-shell skoll-floating-popover absolute right-full mr-2 top-0 z-50 w-[min(94vw,30rem)] max-w-[30rem] p-3.5 pointer-events-auto"
+                      className="nasa-slate skoll-slate-shell skoll-dock-popover absolute right-full mr-2 top-0 z-50 w-[min(94vw,30rem)] max-w-[30rem] p-3.5 pointer-events-auto"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-2">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
@@ -2435,6 +2481,70 @@ export default function App() {
                     </motion.div>
                   )}
                 </div>
+
+              {/* Floating command palette — "Open Live Tools" / "More tools" / keyboard shortcuts */}
+              {openMenuId && commandMenuAnchor && (
+                <>
+                  {/* Backdrop — click outside closes the palette */}
+                  <div
+                    className="fixed inset-0 z-[9997] pointer-events-auto"
+                    onClick={() => { setOpenMenuId(null); setCommandMenuAnchor(null); }}
+                  />
+                  <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  className="nasa-slate skoll-slate-shell skoll-floating-popover fixed z-[9998] pointer-events-auto flex shadow-2xl"
+                  style={{
+                    insetBlockStart: commandMenuAnchor.insetBlockStart,
+                    insetInlineStart: commandMenuAnchor.insetInlineStart,
+                    width: 'min(96vw, 60rem)',
+                    maxHeight: '78vh',
+                  }}
+                >
+                  {/* Left: tool list */}
+                  <div className="w-40 shrink-0 border-r border-cyan-500/20 flex flex-col overflow-y-auto wolf-scroll">
+                    <div className="flex items-center justify-between px-2.5 py-2 border-b border-cyan-500/20">
+                      <span className="text-[8px] uppercase tracking-[0.2em] text-cyan-400/70">Tools</span>
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuId(null); setCommandMenuAnchor(null); }}
+                        className="skoll-circle-action skoll-circle-action-danger text-[10px]"
+                        aria-label="Close tool palette"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {(menuGroups[openMenuId] ?? []).map((tileId) => {
+                      const tile = tileCatalog.find((t) => t.id === tileId);
+                      if (!tile) return null;
+                      return (
+                        <button
+                          key={tileId}
+                          type="button"
+                          onClick={() => setActiveSubTileId(tileId)}
+                          className={`text-left px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${activeSubTileId === tileId ? 'bg-cyan-500/20 text-cyan-100 border-l-2 border-cyan-400' : 'text-cyan-400/70 hover:bg-cyan-500/10 hover:text-cyan-200 border-l-2 border-transparent'}`}
+                        >
+                          {tile.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Right: active tool content */}
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="px-3 py-2 border-b border-cyan-500/20 flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">
+                        {tileCatalog.find((t) => t.id === activeSubTileId)?.label ?? activeSubTileId}
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden wolf-scroll p-3 text-[11px]">
+                      {renderSubmenuContent(activeSubTileId)}
+                    </div>
+                  </div>
+                </motion.div>
+                </>
+              )}
               </>
             )}
 
@@ -2469,7 +2579,7 @@ export default function App() {
               dateLabel={formatTimelineDate(effectiveDate)}
             />
             {currentPlanet === 'Earth' && (earthLodStage === 'REGIONAL' || earthLodStage === 'LOCAL') && (
-              <div className="pointer-events-auto absolute bottom-24 right-[252px] z-[75] min-w-[240px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm">
+              <div className="pointer-events-auto absolute right-[252px] z-[75] min-w-[240px] rounded border border-cyan-500/30 bg-black/65 px-3 py-2 text-cyan-100 backdrop-blur-sm" style={{ insetBlockEnd: 'calc(var(--time-explorer-height, 3.5rem) + 1rem)' }}>
                 <div className="text-[8px] uppercase tracking-[0.16em] text-cyan-400/80">Cutaway Earth</div>
                 <label className="mt-1 flex items-center gap-1 text-[9px] uppercase tracking-[0.08em]">
                   <input type="checkbox" checked={cutawayEnabled} onChange={(event) => setCutawayEnabled(event.currentTarget.checked)} />

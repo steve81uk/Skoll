@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { PanelDescription } from './PanelDescription';
 
 /**
  * SuperMAGPanel.tsx
@@ -146,8 +147,18 @@ export default function SuperMAGPanel({ kpIndex = 2, bzGsm = -2, solarWindSpeed 
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '8px', letterSpacing: '0.14em', opacity: 0.6, textTransform: 'uppercase' }}>
-          SuperMAG Network · {stations.length} stations
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ fontSize: '8px', letterSpacing: '0.14em', opacity: 0.6, textTransform: 'uppercase' }}>
+            SuperMAG Network · {stations.length} stations
+          </span>
+          <PanelDescription
+            id="supermag-network"
+            title="SuperMAG Network"
+            summary="Global network of ground-based magnetometers measuring disturbances in Earth's magnetic field from space weather events in real time."
+            axes="Zonal histogram: each latitude band (polar, auroral, sub-auroral, mid-latitude) is a row. Bar length and colour shows the intensity of magnetic field disturbance (dH, in nanoTesla) at stations in that zone. Station map shows individual readings with colour-coded dots."
+            whyItMatters="Ground magnetometer networks detect geomagnetically induced currents (GICs) — the main cause of transformer failures during solar storms. Widespread disturbances in auroral and mid-latitude zones signal escalating risk to power infrastructure."
+            size="xs"
+          />
         </span>
         <span style={{ fontSize: '8px', color: '#ffcc44' }}>
           KP {kp.toFixed(1)} · Bz {bzGsm > 0 ? '+' : ''}{bzGsm.toFixed(1)} nT · {solarWindSpeed.toFixed(0)} km/s · {density.toFixed(1)}/cc

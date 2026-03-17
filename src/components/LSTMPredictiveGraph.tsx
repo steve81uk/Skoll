@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import type { NeuralForecast } from '../ml/types';
 import type { KPPoint, CMEEvent, NOAABundle } from '../hooks/useNOAADONKI';
+import { PanelDescription } from './PanelDescription';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STORM_LEVELS = [
@@ -96,8 +97,18 @@ function KPChart({ kpSeries, kpCurve24h, forecast }: KPChartProps) {
   return (
     <div style={PANEL_STYLE}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBlockEnd:'8px' }}>
-        <span style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em' }}>
-          24-H KP FORECAST /  LSTM
+        <span style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+          <span style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em' }}>
+            24-H KP FORECAST /  LSTM
+          </span>
+          <PanelDescription
+            id="lstm-kp-forecast"
+            title="LSTM Kp Forecast"
+            summary="24-hour Kp index prediction from an on-device LSTM neural network, overlaid on the past 8 hours of observed NOAA data."
+            axes="Y-axis: Kp index 0–9 (0 = quiet, 9 = extreme storm). X-axis: date/time (UTC). Blue area = observed Kp; orange dashed line = LSTM forecast; shaded ribbon = confidence interval."
+            whyItMatters="The Kp index is the primary measure of global geomagnetic storm intensity. Kp ≥ 5 triggers a G1 storm warning; Kp ≥ 7 is a severe G3 storm that can disrupt power grids, GPS, and satellite operations."
+            size="xs"
+          />
         </span>
         {forecast && (
           <span style={{ fontSize:'11px', color: conf > 0.75 ? '#22c55e' : '#eab308', fontFamily:'monospace' }}>
@@ -221,8 +232,18 @@ function CMEImpactChart({ cmeEvents }: CMEChartProps) {
 
   return (
     <div style={PANEL_STYLE}>
-      <div style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em', marginBlockEnd:'8px' }}>
-        CME IMPACT PROBABILITY  /  NASA DONKI
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBlockEnd:'8px' }}>
+        <span style={{ fontSize:'13px', fontFamily:'"Rajdhani",monospace', color:'#60c8ff', letterSpacing:'0.08em' }}>
+          CME IMPACT PROBABILITY  /  NASA DONKI
+        </span>
+        <PanelDescription
+          id="cme-impact-probability"
+          title="CME Impact Probability"
+          summary="Bar chart showing how likely each coronal mass ejection (CME) detected in the past 14 days is to strike Earth, from NASA's DONKI space weather database."
+          axes="X-axis: CME event ID (short label). Y-axis: impact probability 0–100%. Bar colour — green: low risk; yellow/orange: moderate; red: high impact likely."
+          whyItMatters="A direct CME hit drives the strongest geomagnetic storms. An Earth-directed CME can disrupt power grids, GPS signals, satellite communications, and airline polar routes for days."
+          size="xs"
+        />
       </div>
       <div style={{ borderRadius:'8px', overflow:'hidden',
         background:'rgba(0,8,20,0.55)', border:'1px solid rgba(0,200,255,0.09)',

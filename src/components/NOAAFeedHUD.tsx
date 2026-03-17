@@ -14,6 +14,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { PanelDescription } from './PanelDescription';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface NOAAMagRow  { time_tag: string; bt: string; bz_gsm: string }
@@ -210,6 +211,14 @@ export const NOAAFeedHUD: React.FC<NOAAFeedHUDProps> = ({
           <span className="text-xs uppercase tracking-[0.22em] font-mono text-green-400/90">
             NOAA Live Feed
           </span>
+          <PanelDescription
+            id="noaa-live-feed"
+            title="NOAA Live Feed"
+            summary="Real-time solar wind and geomagnetic measurements from NOAA Space Weather Prediction Center, with a 3-hour predictive model."
+            axes="Kp Index: 0–9 geomagnetic storm scale. Solar Wind: plasma speed in km/s. IMF Bt: total interplanetary magnetic field strength (nT). Bz GSM: north-south IMF component — negative values drive storms. Density: solar wind proton density (particles/cm³). The 'Fcst' column shows a 3-hour trend extrapolation."
+            whyItMatters="These are the primary inputs for real-time space weather operations. Southward Bz and fast solar wind directly predict geomagnetic storm onset, satellite drag, and GPS disruption risk."
+            size="xs"
+          />
         </div>
         <div className="flex items-center gap-1.5">
           {status === 'fallback' && (
